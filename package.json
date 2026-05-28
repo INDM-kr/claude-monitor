@@ -1,0 +1,17 @@
+{
+  "name": "claude-monitor",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Claude Code session monitor (CLI + Web UI)",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev": "pnpm --filter @claude-monitor/web dev",
+    "start": "pnpm --filter @claude-monitor/web start"
+  },
+  "engines": {
+    "node": ">=18.17",
+    "pnpm": ">=8"
+  },
+  "packageManager": "pnpm@10.28.2"
+}

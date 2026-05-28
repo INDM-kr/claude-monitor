@@ -19,15 +19,18 @@ ETA / time-remaining is intentionally not displayed: Claude does not write its o
 ```bash
 git clone <repo-url> ~/projects/claude-monitor
 cd ~/projects/claude-monitor
-bash scripts/install.sh
+bash scripts/install.sh                       # CLI + Web UI
+SKIP_WEB=1 bash scripts/install.sh            # CLI only
+WITH_LAUNCHAGENT=1 bash scripts/install.sh    # also auto-start web UI at login
 ```
 
 This copies:
 
 - `bin/claude-monitor` → `~/bin/claude-monitor`
 - `app/ClaudeMonitor.app` → `~/Applications/ClaudeMonitor.app`
+- `scripts/start-web.sh` → `~/bin/claude-monitor-web` (when web UI is installed)
 
-Both are independent copies; re-run `scripts/install.sh` to push changes from the project to the installed locations.
+Re-run `scripts/install.sh` to push project changes to the installed copies.
 
 ### Dependencies
 
@@ -35,6 +38,35 @@ Both are independent copies; re-run `scripts/install.sh` to push changes from th
 - `jq` (any version)
 - `watch` (`brew install watch` if missing — only needed for the `.app` launcher)
 - `rsvg-convert` (`brew install librsvg`) and ImageMagick (`brew install imagemagick`) — only needed to rebuild the icon from SVGs
+- For the web UI: Node 18+ and `pnpm` 8+ (`brew install node pnpm` or `corepack enable`)
+
+## Web UI
+
+```bash
+~/bin/claude-monitor-web                      # starts Next.js server on 127.0.0.1:11314
+open http://127.0.0.1:11314
+```
+
+The Next.js server binds to `127.0.0.1` by default — LAN access is blocked. Set `HOSTNAME=0.0.0.0` to expose it on your LAN, but pair that with `CM_BEARER_TOKEN` for auth:
+
+```bash
+CM_BEARER_TOKEN=$(openssl rand -hex 32) ~/bin/claude-monitor-web
+# clients must send: Authorization: Bearer <token>
+```
+
+Tunables (all optional):
+
+| env | default | meaning |
+|---|---|---|
+| `HOSTNAME` | `127.0.0.1` | bind address |
+| `PORT` | `11314` | listening port |
+| `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | source directory |
+| `CM_ACTIVE_THRESHOLD_SEC` | `60` | < this → LIVE |
+| `CM_RECENT_THRESHOLD_SEC` | `600` | < this → idle |
+| `CM_MAX_AGE_HOURS` | `24` | default cutoff for `/?` and `/api/sessions` |
+| `CM_BEARER_TOKEN` | _(unset)_ | when set, all API + page requests require `Authorization: Bearer <token>` |
+
+The web UI is a separate codepath from the CLI — both exist side-by-side. The CLI stays for SSH/headless use and as a fallback when the web server is down.
 
 ## Usage
 
@@ -66,8 +98,13 @@ icons/
   ClaudeMonitor.icns     Compiled multi-resolution icon
 scripts/
   build-icon.sh          SVG → PNG → .icns → install into app
-  install.sh             Copy bin + app to ~/bin and ~/Applications
+  install.sh             Copy bin + app to ~/bin and ~/Applications; build web UI
+  start-web.sh           Web UI launcher (installed as ~/bin/claude-monitor-web)
   uninstall.sh           Remove installed copies (leaves project intact)
+packages/
+  core/                  Shared types, util, adapter & widget registries
+  adapter-claude-code/   JSONL parser, incremental tail reader, chokidar watcher
+  web/                   Next.js 14 App Router dashboard + SSE
 ```
 
 ## How sessions are discovered

@@ -1,0 +1,4 @@
+{"type":"user","message":{"content":[{"type":"text","text":"hello"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"hi back"},{"type":"tool_use","id":"tu_1","name":"Read","input":{"file_path":"/x"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_1","content":"file contents"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"all done"}]}}
