@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#bg3)"/>
+  <!-- terminal window -->
+  <rect x="160" y="220" width="704" height="584" rx="40" ry="40" fill="#0f172a"/>
+  <!-- title bar -->
+  <rect x="160" y="220" width="704" height="80" rx="40" ry="40" fill="#1e293b"/>
+  <rect x="160" y="270" width="704" height="30" fill="#1e293b"/>
+  <!-- traffic lights -->
+  <circle cx="220" cy="260" r="18" fill="#ef4444"/>
+  <circle cx="280" cy="260" r="18" fill="#f59e0b"/>
+  <circle cx="340" cy="260" r="18" fill="#22c55e"/>
+  <!-- prompt arrow ">" as polyline -->
+  <polyline points="220,370 320,440 220,510" fill="none" stroke="#22c55e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- cursor block -->
+  <rect x="360" y="370" width="60" height="140" fill="#22c55e"/>
+  <!-- LIVE dot (top right of window) -->
+  <circle cx="780" cy="380" r="32" fill="#22c55e"/>
+  <circle cx="780" cy="380" r="50" fill="none" stroke="#22c55e" stroke-width="6" opacity="0.5"/>
+  <!-- pulse waveform -->
+  <polyline points="200,660 280,660 320,580 360,740 400,500 440,740 480,660 580,660 620,600 660,720 700,660 820,660"
+    fill="none" stroke="#22c55e" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

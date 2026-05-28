@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="70%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#7c2d12"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#bg2)"/>
+  <!-- eye outline -->
+  <path d="M 180 512 Q 512 220 844 512 Q 512 804 180 512 Z" fill="none" stroke="#fb923c" stroke-width="22" stroke-linejoin="round"/>
+  <!-- iris -->
+  <circle cx="512" cy="512" r="170" fill="url(#iris)"/>
+  <!-- pupil -->
+  <circle cx="512" cy="512" r="80" fill="#0f172a"/>
+  <!-- glint -->
+  <circle cx="480" cy="480" r="22" fill="#ffffff" opacity="0.9"/>
+  <!-- left bracket "<" drawn as polyline -->
+  <polyline points="220,180 130,260 220,340" fill="none" stroke="#22d3ee" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>
+  <!-- right bracket "/>" drawn as polyline group -->
+  <polyline points="800,680 890,760 800,840" fill="none" stroke="#22d3ee" stroke-width="24" stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>
+  <line x1="760" y1="860" x2="860" y2="660" stroke="#22d3ee" stroke-width="24" stroke-linecap="round" opacity="0.85"/>
+</svg>

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#bg4)"/>
+
+  <!-- top-left: LIVE panel -->
+  <rect x="160" y="160" width="320" height="320" rx="40" fill="#0f172a"/>
+  <circle cx="260" cy="260" r="40" fill="#22c55e"/>
+  <circle cx="260" cy="260" r="62" fill="none" stroke="#22c55e" stroke-width="8" opacity="0.4"/>
+  <rect x="200" y="340" width="240" height="18" rx="9" fill="#22c55e" opacity="0.8"/>
+  <rect x="200" y="380" width="180" height="18" rx="9" fill="#475569"/>
+  <rect x="200" y="420" width="200" height="18" rx="9" fill="#475569"/>
+
+  <!-- top-right: chart -->
+  <rect x="540" y="160" width="320" height="320" rx="40" fill="#0f172a"/>
+  <polyline points="580,440 640,360 700,400 760,260 820,310"
+    fill="none" stroke="#fb923c" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="820" cy="310" r="18" fill="#fb923c"/>
+  <!-- baseline grid -->
+  <line x1="580" y1="450" x2="820" y2="450" stroke="#1e293b" stroke-width="4"/>
+
+  <!-- bottom-left: agents -->
+  <rect x="160" y="540" width="320" height="320" rx="40" fill="#0f172a"/>
+  <circle cx="240" cy="700" r="44" fill="#a78bfa"/>
+  <circle cx="320" cy="700" r="44" fill="#a78bfa" opacity="0.7"/>
+  <circle cx="400" cy="700" r="44" fill="#a78bfa" opacity="0.4"/>
+  <!-- connecting lines (agent network) -->
+  <line x1="240" y1="700" x2="320" y2="700" stroke="#a78bfa" stroke-width="6" opacity="0.5"/>
+  <line x1="320" y1="700" x2="400" y2="700" stroke="#a78bfa" stroke-width="6" opacity="0.5"/>
+
+  <!-- bottom-right: progress ring -->
+  <rect x="540" y="540" width="320" height="320" rx="40" fill="#0f172a"/>
+  <circle cx="700" cy="700" r="120" fill="none" stroke="#1e293b" stroke-width="32"/>
+  <circle cx="700" cy="700" r="120" fill="none" stroke="#22d3ee" stroke-width="32"
+    stroke-dasharray="565" stroke-dashoffset="170" transform="rotate(-90 700 700)" stroke-linecap="round"/>
+  <circle cx="700" cy="700" r="40" fill="#22d3ee"/>
+</svg>

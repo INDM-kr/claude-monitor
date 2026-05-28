@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Claude Code session monitor — groups CCD sessions by workspace, detects sub-agents + todos.
+# Read-only: scans ~/.claude/projects/ JSONL transcripts.
+#
+# Usage: claude-monitor [--all] [--max-age-hours N] [--filter PATTERN]
+#   --all              show stopped sessions too (default: only active in last 24h)
+#   --max-age-hours N  override age cutoff (default 24)
+#   --filter PATTERN   only project dirs matching glob (default: all)
+#                      e.g. --filter '*indm-codegen*'
+
+set -u
+
+PROJECTS_DIR="${HOME}/.claude/projects"
+MAX_AGE_HOURS=24
+SHOW_ALL=0
+FILTER='*'
+ACTIVE_THRESHOLD=60     # < N seconds since last write → "running"
+RECENT_THRESHOLD=600    # < N seconds → "recent"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) SHOW_ALL=1; shift ;;
+    --max-age-hours) MAX_AGE_HOURS=$2; shift 2 ;;
+    --filter) FILTER=$2; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+
+NOW_EPOCH=$(date +%s)
+CUTOFF_EPOCH=$((NOW_EPOCH - MAX_AGE_HOURS * 3600))
+
+color() { printf "\033[%sm%s\033[0m" "$1" "$2"; }
+green()  { color "32" "$1"; }
+yellow() { color "33" "$1"; }
+red()    { color "31" "$1"; }
+cyan()   { color "36" "$1"; }
+dim()    { color "2"  "$1"; }
+bold()   { color "1"  "$1"; }
+
+decode_path() { echo "${1//-//}"; }
+
+ago() {
+  local s=$1
+  if (( s < 60 )); then echo "${s}s ago"
+  elif (( s < 3600 )); then echo "$((s/60))m ago"
+  elif (( s < 86400 )); then echo "$((s/3600))h ago"
+  else echo "$((s/86400))d ago"; fi
+}
+
+# jq program: read whole jsonl as stream, emit one summary JSON.
+# Counts pending Task/Agent sub-agents (tool_use without matching tool_result),
+# extracts last tool, last assistant text, and last TodoWrite snapshot.
+JQ_PROG='
+def safe_content: (.message.content // []) | if type=="array" then . else [] end;
+
+[inputs] as $all
+| ($all | map(select(.type=="assistant"))) as $A
+| ($all | map(select(.type=="user"))) as $U
+| ($A | map(safe_content | map(select(.type=="tool_use"))) | flatten) as $tools
+| ($U | map(safe_content | map(select(.type=="tool_result"))) | flatten) as $results
+| ($tools | map(select(.name=="Task" or .name=="Agent")) | map(.id)) as $subagent_ids
+| ($results | map(.tool_use_id)) as $done_ids
+| ($subagent_ids - $done_ids) as $pending_ids
+| ($tools | map(select(.name=="Task" or .name=="Agent")) | map({id, desc: ((.input.description // .input.subagent_type // "agent") | tostring | .[0:40])})) as $subagent_calls
+| ($subagent_calls | map(select(.id as $id | $pending_ids | index($id)))) as $pending
+| ($tools | last) as $last_tool
+| ($A | map(safe_content | map(select(.type=="text") | .text) | join(" ")) | map(select(length>0)) | last // "") as $last_text
+| ($tools | map(select(.name=="TodoWrite")) | last) as $last_todo_call
+| ($last_todo_call.input.todos // []) as $todos
+| {
+    last_tool_name: ($last_tool.name // ""),
+    pending_subagents: $pending,
+    pending_count: ($pending | length),
+    last_text: ($last_text[0:200]),
+    todo_total: ($todos | length),
+    todo_done: ($todos | map(select(.status=="completed")) | length),
+    todo_current: (($todos | map(select(.status=="in_progress")) | first // {}).content // ""),
+    todo_next: (($todos | map(select(.status=="pending")) | first // {}).content // "")
+  }
+'
+
+# Find project dirs matching filter
+DIRS=()
+while IFS= read -r line; do
+  DIRS+=("$line")
+done < <(find "$PROJECTS_DIR" -maxdepth 1 -type d -name "$FILTER" | sort)
+
+title_suffix=""
+[[ "$FILTER" != "*" ]] && title_suffix=" [filter: $FILTER]"
+printf "\n%s%s  %s\n" "$(bold "Claude Code 세션 모니터")" "$title_suffix" "$(dim "($(date '+%Y-%m-%d %H:%M:%S'))")"
+printf "%s\n" "$(dim "─────────────────────────────────────────────────────────────────────")"
+[[ $SHOW_ALL -eq 0 ]] && printf "%s\n" "$(dim "필터: 최근 ${MAX_AGE_HOURS}h 활동만 (전체: --all)")"
+
+shown_any=0
+
+for dir in "${DIRS[@]}"; do
+  base=$(basename "$dir")
+  ws=$(decode_path "$base")
+  ws_short=$(echo "$ws" | sed -E 's|^/Users/Nexist/(conductor/workspaces/)?||; s|^projects/||; s|/.claude/worktrees/|/wt:|')
+
+  FILES=()
+  while IFS= read -r line; do
+    FILES+=("$line")
+  done < <(find "$dir" -maxdepth 1 -name '*.jsonl' -type f 2>/dev/null)
+  [[ ${#FILES[@]} -eq 0 ]] && continue
+
+  # Filter files by age unless --all
+  KEPT=()
+  for f in "${FILES[@]}"; do
+    mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f")
+    if [[ $SHOW_ALL -eq 1 || $mtime -ge $CUTOFF_EPOCH ]]; then
+      KEPT+=("$mtime:$f")
+    fi
+  done
+  [[ ${#KEPT[@]} -eq 0 ]] && continue
+
+  shown_any=1
+  printf "\n%s  %s\n" "$(bold "📁 $ws_short")" "$(dim "(${#KEPT[@]}/${#FILES[@]} 세션)")"
+
+  # Sort by mtime desc
+  printf "%s\n" "${KEPT[@]}" | sort -t: -k1 -nr | while IFS=: read -r mtime f; do
+    sid=$(basename "$f" .jsonl)
+    age=$((NOW_EPOCH - mtime))
+
+    if (( age < ACTIVE_THRESHOLD )); then
+      status="$(green '● LIVE')"
+    elif (( age < RECENT_THRESHOLD )); then
+      status="$(yellow '○ idle')"
+    else
+      status="$(dim '· stop')"
+    fi
+
+    summary=$(jq "$JQ_PROG" "$f" 2>/dev/null)
+    if [[ -z "$summary" ]]; then
+      printf "  %s  %s  %s  %s\n" "$status" "$(dim "${sid:0:8}")" "$(dim "$(ago $age)")" "$(red '(parse err)')"
+      continue
+    fi
+
+    last_tool=$(echo "$summary" | jq -r '.last_tool_name')
+    pending_count=$(echo "$summary" | jq -r '.pending_count')
+    last_text=$(echo "$summary" | jq -r '.last_text // ""' | tr '\n' ' ')
+    todo_total=$(echo "$summary" | jq -r '.todo_total')
+    todo_done=$(echo "$summary" | jq -r '.todo_done')
+    todo_cur=$(echo "$summary" | jq -r '.todo_current // ""')
+    todo_next=$(echo "$summary" | jq -r '.todo_next // ""')
+
+    printf "  %s  %s  %s\n" "$status" "$(cyan "${sid:0:8}")" "$(dim "$(ago $age)")"
+
+    [[ -n "$last_tool" && "$last_tool" != "null" ]] && \
+      printf "      tool: %s\n" "$(yellow "$last_tool")"
+
+    if [[ "$pending_count" -gt 0 ]]; then
+      pending_descs=$(echo "$summary" | jq -r '.pending_subagents | map(.desc) | join(", ")')
+      printf "      %s %s\n" "$(red "🤖 sub-agent ${pending_count}개:")" "$(red "$pending_descs")"
+    fi
+
+    if [[ "$todo_total" -gt 0 ]]; then
+      printf "      %s\n" "$(green "todo ${todo_done}/${todo_total}")"
+      [[ -n "$todo_cur" ]] && printf "        %s %s\n" "$(green '▶ 진행:')" "${todo_cur:0:80}"
+      [[ -n "$todo_next" ]] && printf "        %s %s\n" "$(dim '· 다음:')" "${todo_next:0:80}"
+    fi
+
+    [[ -n "$last_text" ]] && printf "      %s %s\n" "$(dim '└ msg:')" "$(dim "${last_text:0:120}")"
+  done
+done
+
+if [[ $shown_any -eq 0 ]]; then
+  printf "\n%s\n" "$(dim "최근 ${MAX_AGE_HOURS}h 활동 세션 없음. 전체 보려면: --all")"
+fi
+
+printf "\n%s\n" "$(dim '범례: ● LIVE(<60s)   ○ idle(<10m)   · stop')"
+printf "%s\n" "$(dim 'ETA·총 남은시간 표시 안 함 — transcript 에 자체 추정값 없음 (추측 금지)')"
