@@ -1,13 +1,14 @@
 import type { SessionSummary } from "@claude-monitor/core";
 import { getDataSource } from "../lib/data-source/local";
 import { loadConfig } from "../lib/config";
+import { sessionMatches } from "../lib/filter";
 import { Dashboard } from "./_components/Dashboard";
 
 export const dynamic = "force-dynamic";
 
-interface InitialGroup {
-  workspace: string;
-  workspaceShort: string;
+export interface ProjectGroupData {
+  projectKey: string;
+  projectLabel: string;
   sessions: SessionSummary[];
 }
 
@@ -22,40 +23,30 @@ export default async function Page({
   const filterGlob = searchParams?.filter ?? null;
 
   const ds = getDataSource();
-  let summaries = await ds.snapshot();
-  if (!all && Number.isFinite(maxAge)) {
-    const cutoff = Math.floor(Date.now() / 1000) - maxAge * 3600;
-    summaries = summaries.filter((s) => s.ref.mtime >= cutoff);
-  }
-  if (filterGlob) {
-    const re = globToRegExp(filterGlob);
-    summaries = summaries.filter(
-      (s) => re.test(s.ref.workspace) || re.test(s.ref.workspaceShort),
-    );
-  }
-  const initial = groupByWorkspace(summaries);
+  const now = Math.floor(Date.now() / 1000);
+  const summaries = (await ds.snapshot()).filter((s) =>
+    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, now }),
+  );
+  const initial = groupByProject(summaries);
 
   return <Dashboard initial={initial} />;
 }
 
-function groupByWorkspace(list: SessionSummary[]): InitialGroup[] {
-  const map = new Map<string, InitialGroup>();
+export function groupByProject(list: SessionSummary[]): ProjectGroupData[] {
+  const map = new Map<string, ProjectGroupData>();
   for (const s of list) {
-    const key = s.ref.workspace;
+    const key = s.ref.projectKey;
     let g = map.get(key);
     if (!g) {
-      g = { workspace: s.ref.workspace, workspaceShort: s.ref.workspaceShort, sessions: [] };
+      g = { projectKey: key, projectLabel: s.ref.projectLabel, sessions: [] };
       map.set(key, g);
     }
     g.sessions.push(s);
   }
-  return [...map.values()];
-}
-
-function globToRegExp(g: string): RegExp {
-  const re = g
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
-  return new RegExp(re);
+  for (const g of map.values()) g.sessions.sort((a, b) => b.ref.mtime - a.ref.mtime);
+  return [...map.values()].sort((a, b) => {
+    const am = Math.max(...a.sessions.map((s) => s.ref.mtime));
+    const bm = Math.max(...b.sessions.map((s) => s.ref.mtime));
+    return bm - am;
+  });
 }
