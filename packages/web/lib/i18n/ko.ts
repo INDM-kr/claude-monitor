@@ -32,6 +32,22 @@ export const ko = {
     all: "전체",
     projectFilter: "프로젝트 필터",
   },
+  detail: {
+    back: "← 대시보드",
+    source: "소스",
+    branch: "브랜치",
+    version: "버전",
+    usageTrend: "컨텍스트 추이",
+    noUsage: "usage 데이터 없음",
+    todos: "할 일",
+    subagents: "대기 sub-agent",
+    lastMessage: "마지막 메시지",
+  },
+  errors: {
+    title: "문제가 발생했습니다",
+    retry: "다시 시도",
+    notFound: "세션을 찾을 수 없습니다",
+  },
 } as const;
 
 export type Locale = typeof ko;
