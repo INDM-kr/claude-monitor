@@ -7,6 +7,7 @@ import { groupByProject, type ProjectGroupData } from "../../lib/group";
 import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
+import { fetchSnapshot } from "../../lib/sync";
 
 export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const setInitial = useSessionStore((s) => s.setInitial);
@@ -22,6 +23,7 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   }, [initial, setInitial]);
 
   useEffect(() => {
+    let wasErrored = false;
     const es = new EventSource("/api/events");
     es.addEventListener("summary", (e) => {
       try {
@@ -39,10 +41,23 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
       }
     });
     es.addEventListener("heartbeat", () => setConnected(true));
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
+    es.onopen = () => {
+      setConnected(true);
+      if (wasErrored) {
+        wasErrored = false;
+        fetchSnapshot()
+          .then((list) => setInitial(list))
+          .catch(() => {
+            /* 다음 틱에 재시도 */
+          });
+      }
+    };
+    es.onerror = () => {
+      wasErrored = true;
+      setConnected(false);
+    };
     return () => es.close();
-  }, [upsert, remove, setConnected]);
+  }, [upsert, remove, setConnected, setInitial]);
 
   const groups = useMemo(() => groupByProject([...sessions.values()]), [sessions]);
 
