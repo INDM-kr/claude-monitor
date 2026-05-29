@@ -52,6 +52,7 @@ export function parsePsOutput(text: string): ProbeEntry[] {
 }
 
 let cache: { at: number; map: Map<string, ProbeEntry> } | null = null;
+let inflight: Promise<Map<string, ProbeEntry>> | null = null;
 const TTL_MS = 4000;
 
 export async function probeProcesses(
@@ -59,13 +60,18 @@ export async function probeProcesses(
 ): Promise<Map<string, ProbeEntry>> {
   const now = opts.now ?? Date.now();
   if (!opts.force && cache && now - cache.at < TTL_MS) return cache.map;
-  const map = new Map<string, ProbeEntry>();
-  try {
-    const { stdout } = await pexec("ps -eo pid=,command=", { maxBuffer: 16 * 1024 * 1024 });
-    for (const e of parsePsOutput(stdout)) map.set(e.sessionId, e);
-  } catch {
-    // ps 실패 시 빈 맵 (프로브 없음 = pid/runner 미보강, 치명적 아님)
-  }
-  cache = { at: now, map };
-  return map;
+  if (!opts.force && inflight) return inflight;
+  inflight = (async () => {
+    const map = new Map<string, ProbeEntry>();
+    try {
+      const { stdout } = await pexec("ps -eo pid=,command=", { maxBuffer: 16 * 1024 * 1024 });
+      for (const e of parsePsOutput(stdout)) map.set(e.sessionId, e);
+    } catch {
+      // ps 실패 시 빈 맵 (프로브 없음 = pid/runner 미보강, 치명적 아님)
+    }
+    cache = { at: now, map };
+    inflight = null;
+    return map;
+  })();
+  return inflight;
 }
