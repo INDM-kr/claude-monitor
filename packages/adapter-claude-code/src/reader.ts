@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import type { SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
-import { defaultThresholds, statusFromMtime, type StatusThresholds } from "@claude-monitor/core";
+import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext } from "@claude-monitor/core";
 import { fold, initial, pendingSubagents, summarizeTodos, type ParserState } from "./parser.js";
 
 export interface ReaderOptions {
@@ -40,13 +40,41 @@ export class ClaudeCodeReader implements SessionReader {
     }
 
     const now = Math.floor(Date.now() / 1000);
+
+    // cwd가 있으면 lossy decoded ref를 정정
+    const cwd = this.state.cwd;
+    const baseRef = cwd
+      ? (() => {
+          const id = projectIdentityFromCwd(cwd);
+          return {
+            ...this.ref,
+            workspace: cwd,
+            workspaceShort: shortenWorkspace(cwd) || cwd,
+            projectKey: id.key,
+            projectLabel: id.label,
+            owner: id.owner,
+            mtime: mtimeSec,
+          };
+        })()
+      : { ...this.ref, mtime: mtimeSec };
+
+    const limit = contextLimitForModel(this.state.model);
+    const context =
+      this.state.contextTokens != null ? computeContext(this.state.contextTokens, limit) : null;
+
     const summary: SessionSummary = {
-      ref: { ...this.ref, mtime: mtimeSec },
+      ref: baseRef,
       status: statusFromMtime(mtimeSec, now, this.thresholds),
       lastTool: this.state.lastToolName,
       pendingSubagents: pendingSubagents(this.state),
       todo: summarizeTodos(this.state.lastTodos),
       lastText: this.state.lastText,
+      runner: "unknown",
+      model: this.state.model,
+      mode: this.state.mode,
+      version: this.state.version,
+      context,
+      pid: null,
       updatedAt: now,
     };
     this.cached = summary;
