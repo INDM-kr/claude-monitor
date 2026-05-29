@@ -8,7 +8,9 @@
 
 **Tech Stack:** TypeScript(ESM, NodeNext), pnpm monorepo, vitest, Next.js 14 App Router, React 18, zustand, Tailwind, lucide-react, Node `child_process`(ps).
 
-> **패키지별 import 규약 (반드시 준수):** `packages/core`·`packages/adapter-claude-code`는 상대 import에 `.js` 확장자 필수(NodeNext). `packages/web`은 Next 번들러 — 확장자 없음. 테스트는 `src/**/__tests__/**/*.test.ts`(vitest).
+> **패키지별 import 규약 (반드시 준수):** `packages/core`·`packages/adapter-claude-code`는 `moduleResolution: Bundler`지만 기존 코드가 상대 import에 `.js`를 쓰므로 **동일하게 `.js` 유지**(예: `from "./parser.js"`). `packages/web`은 Next 번들러 — 확장자 없음. 테스트는 `src/**/__tests__/**/*.test.ts`(core/adapter) · `lib/**/__tests__/**/*.test.ts`(web), vitest.
+
+> **중간 빌드 주의 (의도된 캐스케이드):** Phase 1이 `SessionRef`/`SessionSummary`에 필수 필드를 추가하면 `packages/web`는 Phase 3(Task 8~9) 완료 전까지 타입 에러로 빌드 실패한다 — **정상**이다. Phase 1~2 진행 중에는 `pnpm -r build`(전체)나 `--filter @claude-monitor/web build`를 돌리지 말 것. 각 Phase의 명시된 검증 명령만 사용. 또한 web `next build`는 의존 패키지의 `dist/`를 읽으므로(저장소 baseline에 dist 없음), web을 빌드하기 전 반드시 `pnpm --filter @claude-monitor/core build && pnpm --filter @claude-monitor/adapter-claude-code build`가 선행돼야 한다.
 
 > **참조 스펙:** `docs/superpowers/specs/2026-05-29-claude-monitor-web-mvp-design.md`
 
@@ -349,11 +351,15 @@ git commit -m "feat(core): context-limit util (기본 200k + pct 계산)"
 
 - [ ] **Step 1: 실패 테스트 추가**
 
-`packages/adapter-claude-code/src/__tests__/parser.test.ts`에 `describe` 블록 추가:
+⚠️ **기존 import 재사용** — `parser.test.ts:5`에 이미 `import { fold, initial, pendingSubagents, summarizeTodos } from "../parser.js";` 존재. **새 import 라인 추가 금지**(중복 바인딩 = SyntaxError). 기존 line 5를 다음으로 교체:
 
 ```ts
-import { fold, initial, usageContextTokens } from "../parser.js";
+import { fold, initial, pendingSubagents, summarizeTodos, usageContextTokens } from "../parser.js";
+```
 
+그리고 파일 끝에 `describe` 블록만 추가:
+
+```ts
 describe("parser metadata enrichment", () => {
   it("최상위 cwd/gitBranch/version/permissionMode를 흡수", () => {
     let s = initial();
@@ -498,45 +504,58 @@ git commit -m "feat(adapter): 파서가 cwd/git/version/mode/model/usage 흡수"
 - Modify: `packages/adapter-claude-code/src/reader.ts`
 - Test: `packages/adapter-claude-code/src/__tests__/reader.test.ts`
 
-- [ ] **Step 1: 실패 테스트 추가**
+- [ ] **Step 1a: 기존 mkRef에 신규 필수 필드 추가**
 
-기존 reader 테스트는 fixture JSONL을 읽는다. fixture에 메타 줄이 없을 수 있으니, **새 fixture**를 만들어 검증한다.
-
-Create `packages/adapter-claude-code/src/__tests__/fixtures/enriched.jsonl`:
-
-```
-{"type":"assistant","cwd":"/Users/kim/conductor/workspaces/proj-x/lisbon","gitBranch":"main","version":"2.1.156","permissionMode":"acceptEdits","message":{"model":"claude-opus-4-8","usage":{"input_tokens":2,"cache_read_input_tokens":98,"cache_creation_input_tokens":0},"content":[{"type":"text","text":"hello"}]}}
-```
-
-`reader.test.ts`에 추가:
+`reader.test.ts:27-36`의 `mkRef`가 새 필수 필드(projectKey/projectLabel/owner) 누락 → 보강. **import 추가 없음**(join/fs/vitest 모두 line 1-4에 이미 존재). `mkRef` 본문을 교체:
 
 ```ts
-import { join } from "node:path";
-
-it("cwd로 ref(projectKey/label/owner/workspace)를 정정하고 메타를 채운다", async () => {
-  const src = join(__dirname, "fixtures", "enriched.jsonl");
-  const ref = {
-    id: "s1", adapterId: "claude-code",
-    workspace: "/wrong/decoded", workspaceShort: "wrong",
-    projectKey: "tmp", projectLabel: "tmp", owner: "tmp",
-    source: src, mtime: 0,
+function mkRef(source: string): SessionRef {
+  return {
+    id: "sess1",
+    adapterId: "claude-code",
+    workspace: "/tmp/ws",
+    workspaceShort: "ws",
+    projectKey: "/tmp/ws",
+    projectLabel: "ws",
+    owner: "unknown",
+    source,
+    mtime: Math.floor(Date.now() / 1000),
   };
-  const reader = new ClaudeCodeReader(ref);
-  const sum = await reader.readIncremental();
-  expect(sum.ref.workspace).toBe("/Users/kim/conductor/workspaces/proj-x/lisbon");
-  expect(sum.ref.projectKey).toBe("conductor/proj-x");
-  expect(sum.ref.projectLabel).toBe("proj-x");
-  expect(sum.ref.owner).toBe("kim");
-  expect(sum.model).toBe("claude-opus-4-8");
-  expect(sum.mode).toBe("acceptEdits");
-  expect(sum.version).toBe("2.1.156");
-  expect(sum.context).toEqual({ tokens: 100, limit: 200_000, pct: 100 / 200_000 });
-  expect(sum.runner).toBe("unknown");
-  expect(sum.pid).toBeNull();
-});
+}
 ```
 
-> 기존 reader 테스트가 `SessionRef` 리터럴을 만든다면, 새 필수 필드(projectKey/projectLabel/owner)를 추가해 컴파일을 맞춘다.
+- [ ] **Step 1b: 실패 테스트 추가 (기존 tmpdir 패턴 재사용)**
+
+정적 fixture 파일을 만들지 않는다. 기존 `describe("ClaudeCodeReader incremental tail", ...)` 블록은 `beforeEach`에서 `dir`/`file`(`join(dir,"sess1.jsonl")`)을 만든다. 그 describe 안에 enriched 라인을 써 검증하는 `it`을 추가:
+
+```ts
+  it("cwd로 ref(projectKey/label/owner/workspace)를 정정하고 메타를 채운다", async () => {
+    const enriched = JSON.stringify({
+      type: "assistant",
+      cwd: "/Users/kim/conductor/workspaces/proj-x/lisbon",
+      gitBranch: "main",
+      version: "2.1.156",
+      permissionMode: "acceptEdits",
+      message: {
+        model: "claude-opus-4-8",
+        usage: { input_tokens: 2, cache_read_input_tokens: 98, cache_creation_input_tokens: 0 },
+        content: [{ type: "text", text: "hello" }],
+      },
+    });
+    await fs.writeFile(file, enriched + "\n");
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.ref.workspace).toBe("/Users/kim/conductor/workspaces/proj-x/lisbon");
+    expect(sum.ref.projectKey).toBe("conductor/proj-x");
+    expect(sum.ref.projectLabel).toBe("proj-x");
+    expect(sum.ref.owner).toBe("kim");
+    expect(sum.model).toBe("claude-opus-4-8");
+    expect(sum.mode).toBe("acceptEdits");
+    expect(sum.version).toBe("2.1.156");
+    expect(sum.context).toEqual({ tokens: 100, limit: 200_000, pct: 100 / 200_000 });
+    expect(sum.runner).toBe("unknown");
+    expect(sum.pid).toBeNull();
+  });
+```
 
 - [ ] **Step 2: 실패 확인**
 
@@ -551,7 +570,7 @@ import에 추가:
 import { shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext } from "@claude-monitor/core";
 ```
 
-`readIncremental()`의 `const summary: SessionSummary = {...}` 블록을 교체:
+⚠️ **정확한 앵커**: `readIncremental()` 함수의 **line 42(`const now = Math.floor(Date.now() / 1000);`)부터 line 53(`return summary;`)까지 전체**를 아래로 교체. (기존 `const now`/`this.cached = summary;`/`return summary;` 가 교체블록에 포함되므로, summary 리터럴만 바꾸면 변수 중복선언 에러 발생.)
 
 ```ts
     const now = Math.floor(Date.now() / 1000);
@@ -631,7 +650,7 @@ Expected: 둘 다 성공 (Task 1 컴파일 캐스케이드 해소됨).
 - [ ] **Step 6: 커밋**
 
 ```bash
-git add packages/adapter-claude-code/src/reader.ts packages/adapter-claude-code/src/watcher.ts packages/adapter-claude-code/src/__tests__/reader.test.ts packages/adapter-claude-code/src/__tests__/fixtures/enriched.jsonl
+git add packages/adapter-claude-code/src/reader.ts packages/adapter-claude-code/src/watcher.ts packages/adapter-claude-code/src/__tests__/reader.test.ts
 git commit -m "feat(adapter): reader가 cwd로 ref 정정 + 메타/컨텍스트 채움"
 ```
 
@@ -659,8 +678,8 @@ git commit -m "feat(adapter): reader가 cwd로 ref 정정 + 메타/컨텍스트 
     "lint": "next lint",
     "test": "vitest run"
   },
-  // devDependencies에:
-    "vitest": "^2.0.0"
+  // devDependencies에 (core/adapter와 버전 통일):
+    "vitest": "^1.6.0"
 ```
 
 Create `packages/web/vitest.config.ts`:
@@ -1126,10 +1145,12 @@ function groupByProject(list: SessionSummary[]) {
 }
 ```
 
-- [ ] **Step 6: 통과 + 빌드**
+- [ ] **Step 6: 테스트만 통과 확인 (web build는 Task 9까지 의도적으로 실패)**
 
-Run: `pnpm --filter @claude-monitor/web test -- filter && pnpm --filter @claude-monitor/web build`
-Expected: 테스트 PASS, 빌드 성공.
+Run: `pnpm --filter @claude-monitor/web test -- filter`
+Expected: 테스트 PASS.
+
+⚠️ **이 시점에 `--filter @claude-monitor/web build`를 돌리지 말 것** — page.tsx가 `ProjectGroupData[]`(workspace 필드 없음)를 넘기는데 `Dashboard`의 prop 타입은 아직 옛 `InitialGroup`(workspace 포함)이라 `next build` 타입체크가 실패한다. Task 9에서 Dashboard/ProjectGroup을 맞추면 그린이 된다 (의도된 캐스케이드).
 
 - [ ] **Step 7: 커밋**
 
@@ -1261,16 +1282,19 @@ export function ProjectGroup({
   const [collapsed, toggle] = useCollapsed(projectKey);
   return (
     <section className="space-y-2">
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex items-center gap-2 w-full text-left text-sm text-zinc-300 hover:text-zinc-100"
-      >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-        <span className="font-medium">{projectLabel}</span>
-        <span className="text-xs text-zinc-500">({sessions.length})</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex items-center gap-2 flex-1 text-left text-sm text-zinc-300 hover:text-zinc-100"
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          <span className="font-medium">{projectLabel}</span>
+          <span className="text-xs text-zinc-500">({sessions.length})</span>
+        </button>
+        {/* WidgetSlot은 button 밖 — <button> 안 <div>는 비유효 HTML */}
         <WidgetSlot slot="project-header" session={sessions[0]!} />
-      </button>
+      </div>
       {!collapsed && (
         <div className="space-y-2 pl-1">
           {sessions.map((s) => (
@@ -1337,6 +1361,7 @@ git commit -m "feat(web): 프로젝트 그룹 접기/펼치기 토글 (localStor
 
 ```tsx
 import type { RunnerKind } from "@claude-monitor/core";
+import { t } from "../../lib/i18n/t";
 
 const STYLE: Record<RunnerKind, string> = {
   conductor: "bg-violet-500/15 text-violet-300 border-violet-500/30",
@@ -1345,18 +1370,11 @@ const STYLE: Record<RunnerKind, string> = {
   unknown: "bg-zinc-700/40 text-zinc-400 border-zinc-600/40",
 };
 
-const LABEL: Record<RunnerKind, string> = {
-  conductor: "Conductor",
-  "claude-code": "Claude Code",
-  "claude-desktop": "Claude Desktop",
-  unknown: "—",
-};
-
 export function RunnerBadge({ runner }: { runner: RunnerKind }) {
   if (runner === "unknown") return null;
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${STYLE[runner]}`}>
-      {LABEL[runner]}
+      {t(`runner.${runner}`)}
     </span>
   );
 }
@@ -1368,6 +1386,7 @@ export function RunnerBadge({ runner }: { runner: RunnerKind }) {
 
 ```tsx
 import type { ContextUsage } from "@claude-monitor/core";
+import { t } from "../../lib/i18n/t";
 
 export function ContextBar({ context }: { context: ContextUsage | null }) {
   if (!context) return null;
@@ -1375,7 +1394,7 @@ export function ContextBar({ context }: { context: ContextUsage | null }) {
   const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
   return (
     <div className="flex items-center gap-2 text-xs text-zinc-500 pl-1">
-      <span>컨텍스트</span>
+      <span>{t("card.context")}</span>
       <div className="h-1.5 w-24 rounded bg-zinc-800 overflow-hidden">
         <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
@@ -1398,7 +1417,7 @@ import { RunnerBadge } from "./RunnerBadge";
 import { ContextBar } from "./ContextBar";
 ```
 
-header `<time>` 다음에 러너 배지 추가, 그리고 모델·모드 라인 + 컨텍스트 바를 `lastTool` 위에 삽입:
+⚠️ **삽입 아닌 교체**: 기존 `<header>` 블록(SessionCard.tsx:15-25, `StatusBadge` + `<span>{shortSid}</span>` + `<time>`)을 아래 블록으로 **통째 교체**한다 — 이때 `shortSid` 의 `<span className="text-cyan-400">` 가 상세 링크 `<Link>` 로 바뀐다(span 잔존 금지). 이어서 모델·모드 라인 + `<ContextBar>` 를 `{session.lastTool && ...}` 위에 삽입:
 
 ```tsx
       <header className="flex items-center gap-3 text-sm">
@@ -1569,6 +1588,8 @@ git commit -m "feat(adapter): readUsageSeries — 상세용 컨텍스트 추이"
     usageTrend: "컨텍스트 추이",
     noUsage: "usage 데이터 없음",
     todos: "할 일",
+    subagents: "대기 sub-agent",
+    lastMessage: "마지막 메시지",
   },
   errors: {
     title: "문제가 발생했습니다",
@@ -1583,9 +1604,10 @@ git commit -m "feat(adapter): readUsageSeries — 상세용 컨텍스트 추이"
 
 ```tsx
 import type { UsagePoint } from "@claude-monitor/adapter-claude-code";
+import { t } from "../../lib/i18n/t";
 
 export function UsageTrend({ points }: { points: UsagePoint[] }) {
-  if (points.length < 2) return <div className="text-xs text-zinc-600">usage 데이터 없음</div>;
+  if (points.length < 2) return <div className="text-xs text-zinc-600">{t("detail.noUsage")}</div>;
   const w = 480;
   const h = 80;
   const xs = points.map((p) => p.ts);
@@ -1613,6 +1635,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { readUsageSeries } from "@claude-monitor/adapter-claude-code";
 import { getDataSource } from "../../../lib/data-source/local";
+import { t } from "../../../lib/i18n/t";
 import { UsageTrend } from "../../_components/UsageTrend";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { ContextBar } from "../../_components/ContextBar";
@@ -1635,7 +1658,7 @@ export default async function SessionDetail({
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-      <Link href="/" className="text-xs text-cyan-400 hover:underline">← 대시보드</Link>
+      <Link href="/" className="text-xs text-cyan-400 hover:underline">{t("detail.back")}</Link>
 
       <header className="space-y-2">
         <div className="flex items-center gap-3">
@@ -1645,7 +1668,7 @@ export default async function SessionDetail({
         </div>
         <div className="text-xs text-zinc-500 space-y-0.5">
           <div>{s.ref.workspace}</div>
-          <div>소스: {s.ref.source}</div>
+          <div>{t("detail.source")}: {s.ref.source}</div>
           <div>
             {s.model && <span>{s.model} </span>}
             {s.mode && <span>· {s.mode} </span>}
@@ -1656,13 +1679,13 @@ export default async function SessionDetail({
       </header>
 
       <section className="space-y-2">
-        <h2 className="text-sm text-zinc-300">컨텍스트 추이</h2>
+        <h2 className="text-sm text-zinc-300">{t("detail.usageTrend")}</h2>
         <UsageTrend points={series} />
       </section>
 
       {s.todo && (
         <section className="space-y-1 text-sm">
-          <h2 className="text-zinc-300">할 일 ({s.todo.done}/{s.todo.total})</h2>
+          <h2 className="text-zinc-300">{t("detail.todos")} ({s.todo.done}/{s.todo.total})</h2>
           {s.todo.current && <div className="text-amber-300">▸ {s.todo.current}</div>}
           {s.todo.next && <div className="text-zinc-500">· {s.todo.next}</div>}
         </section>
@@ -1670,7 +1693,7 @@ export default async function SessionDetail({
 
       {s.pendingSubagents.length > 0 && (
         <section className="space-y-1 text-sm">
-          <h2 className="text-zinc-300">대기 sub-agent ({s.pendingSubagents.length})</h2>
+          <h2 className="text-zinc-300">{t("detail.subagents")} ({s.pendingSubagents.length})</h2>
           {s.pendingSubagents.map((a) => (
             <div key={a.id} className="text-zinc-500">└ {a.desc}</div>
           ))}
@@ -1679,7 +1702,7 @@ export default async function SessionDetail({
 
       {s.lastText && (
         <section className="space-y-1 text-sm">
-          <h2 className="text-zinc-300">마지막 메시지</h2>
+          <h2 className="text-zinc-300">{t("detail.lastMessage")}</h2>
           <p className="text-zinc-400 whitespace-pre-wrap">{s.lastText}</p>
         </section>
       )}
@@ -1695,16 +1718,18 @@ export default async function SessionDetail({
 ```tsx
 "use client";
 
+import { t } from "../lib/i18n/t";
+
 export default function Error({ reset }: { error: Error; reset: () => void }) {
   return (
     <main className="max-w-3xl mx-auto px-4 py-10 space-y-3 text-center">
-      <h1 className="text-zinc-200">문제가 발생했습니다</h1>
+      <h1 className="text-zinc-200">{t("errors.title")}</h1>
       <button
         type="button"
         onClick={reset}
         className="text-sm text-cyan-400 border border-cyan-500/40 rounded px-3 py-1 hover:text-cyan-200"
       >
-        다시 시도
+        {t("errors.retry")}
       </button>
     </main>
   );
@@ -1715,12 +1740,13 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
 
 ```tsx
 import Link from "next/link";
+import { t } from "../lib/i18n/t";
 
 export default function NotFound() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-10 space-y-3 text-center">
-      <h1 className="text-zinc-200">세션을 찾을 수 없습니다</h1>
-      <Link href="/" className="text-sm text-cyan-400 hover:underline">← 대시보드</Link>
+      <h1 className="text-zinc-200">{t("errors.notFound")}</h1>
+      <Link href="/" className="text-sm text-cyan-400 hover:underline">{t("detail.back")}</Link>
     </main>
   );
 }
@@ -1728,8 +1754,10 @@ export default function NotFound() {
 
 - [ ] **Step 5: 빌드 + 수동 확인**
 
-Run: `pnpm --filter @claude-monitor/web build`
-Expected: 성공.
+`readUsageSeries`는 어댑터 **dist**에 빌드돼야 web이 본다. Task 11 Step 5가 어댑터를 빌드했지만, 안전하게 선행:
+
+Run: `pnpm --filter @claude-monitor/core build && pnpm --filter @claude-monitor/adapter-claude-code build && pnpm --filter @claude-monitor/web build`
+Expected: 성공. (`Cannot find module readUsageSeries`면 어댑터 dist 미반영 → 위 선행 빌드 확인.)
 
 수동: dev 서버서 카드 클릭 → 상세(풀 메시지·todo·subagent·usage 추이). `/session/bogus-id` → not-found.
 
@@ -1916,6 +1944,7 @@ git commit -m "feat(web): POST /api/sessions/[id]/kill (인증 게이트)"
 import { useState } from "react";
 import { Skull } from "lucide-react";
 import type { SessionSummary } from "@claude-monitor/core";
+import { t } from "../../lib/i18n/t";
 
 export function KillButton({ session }: { session: SessionSummary }) {
   const [confirming, setConfirming] = useState(false);
@@ -1947,14 +1976,14 @@ export function KillButton({ session }: { session: SessionSummary }) {
   if (confirming) {
     return (
       <span className="flex items-center gap-1 text-xs">
-        <span className="text-zinc-400">이 세션을 종료할까요?</span>
+        <span className="text-zinc-400">{t("kill.confirm")}</span>
         <button type="button" disabled={busy} onClick={doKill} className="text-red-400 hover:text-red-300 px-1">
-          종료
+          {t("kill.yes")}
         </button>
         <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="text-zinc-500 px-1">
-          취소
+          {t("kill.no")}
         </button>
-        {error && <span className="text-red-500">종료 실패: {error}</span>}
+        {error && <span className="text-red-500">{t("kill.failed")}: {error}</span>}
       </span>
     );
   }
@@ -1964,9 +1993,9 @@ export function KillButton({ session }: { session: SessionSummary }) {
       type="button"
       onClick={() => setConfirming(true)}
       className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400"
-      title="kill"
+      title={t("kill.button")}
     >
-      <Skull size={12} /> kill
+      <Skull size={12} /> {t("kill.button")}
     </button>
   );
 }
@@ -2128,12 +2157,14 @@ git commit -m "docs: README — 통합/토글/러너·컨텍스트/kill 반영"
 
 - [ ] **Step 1: 푸시 + PR**
 
+⚠️ 현재 git 브랜치는 `why-not-committing`(워크스페이스 디렉토리명 `muscat`과 무관). 브랜치명 하드코딩 대신 `HEAD` 푸시.
+
 Run:
 ```bash
-git push -u origin muscat
-gh pr create --base main --title "Web UI 확장 MVP: 통합·토글·러너/컨텍스트·kill" --body "스펙: docs/superpowers/specs/2026-05-29-claude-monitor-web-mvp-design.md"
+git push -u origin HEAD
+gh pr create --base main --title "Web UI 확장 MVP: 통합·토글·러너/컨텍스트·kill" --body "스펙: docs/superpowers/specs/2026-05-29-claude-monitor-web-mvp-design.md · 플랜: docs/superpowers/plans/2026-05-29-claude-monitor-web-mvp.md"
 ```
-Expected: PR 생성. CI 있으면 그린 확인.
+Expected: 현재 브랜치가 origin에 푸시되고 PR 생성. CI 있으면 그린 확인.
 
 ### Task 19: 회고 (KPT)
 
