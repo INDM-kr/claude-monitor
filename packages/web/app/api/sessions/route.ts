@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server";
-import type { SessionSummary } from "@claude-monitor/core";
 import { getDataSource } from "../../../lib/data-source/local";
 import { checkBearer, unauthorized } from "../../../lib/auth/middleware";
 import { loadConfig } from "../../../lib/config";
 import { sessionMatches } from "../../../lib/filter";
+import { groupByProject } from "../../../lib/group";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,18 +30,4 @@ export async function GET(req: NextRequest): Promise<Response> {
     { projects },
     { headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } },
   );
-}
-
-function groupByProject(list: SessionSummary[]) {
-  const map = new Map<string, { projectKey: string; projectLabel: string; sessions: SessionSummary[] }>();
-  for (const s of list) {
-    const key = s.ref.projectKey;
-    let g = map.get(key);
-    if (!g) {
-      g = { projectKey: key, projectLabel: s.ref.projectLabel, sessions: [] };
-      map.set(key, g);
-    }
-    g.sessions.push(s);
-  }
-  return [...map.values()];
 }

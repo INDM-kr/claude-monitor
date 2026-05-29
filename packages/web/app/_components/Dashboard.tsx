@@ -3,17 +3,12 @@
 import { useEffect, useMemo } from "react";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
+import { groupByProject, type ProjectGroupData } from "../../lib/group";
 import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
 
-interface InitialGroup {
-  projectKey: string;
-  projectLabel: string;
-  sessions: SessionSummary[];
-}
-
-export function Dashboard({ initial }: { initial: InitialGroup[] }) {
+export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const setInitial = useSessionStore((s) => s.setInitial);
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
@@ -80,23 +75,4 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
       </footer>
     </main>
   );
-}
-
-function groupByProject(list: SessionSummary[]): InitialGroup[] {
-  const map = new Map<string, InitialGroup>();
-  for (const s of list) {
-    const key = s.ref.projectKey;
-    let g = map.get(key);
-    if (!g) {
-      g = { projectKey: key, projectLabel: s.ref.projectLabel, sessions: [] };
-      map.set(key, g);
-    }
-    g.sessions.push(s);
-  }
-  for (const g of map.values()) g.sessions.sort((a, b) => b.ref.mtime - a.ref.mtime);
-  return [...map.values()].sort((a, b) => {
-    const am = Math.max(...a.sessions.map((s) => s.ref.mtime));
-    const bm = Math.max(...b.sessions.map((s) => s.ref.mtime));
-    return bm - am;
-  });
 }

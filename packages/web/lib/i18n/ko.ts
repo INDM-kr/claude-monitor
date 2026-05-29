@@ -17,8 +17,6 @@ export const ko = {
     todoCurrent: "진행",
     todoNext: "다음",
     msg: "msg",
-    model: "모델",
-    mode: "모드",
     context: "컨텍스트",
   },
   runner: {
