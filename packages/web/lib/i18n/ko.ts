@@ -48,6 +48,13 @@ export const ko = {
     retry: "다시 시도",
     notFound: "세션을 찾을 수 없습니다",
   },
+  kill: {
+    button: "kill",
+    confirm: "이 세션을 종료할까요?",
+    yes: "종료",
+    no: "취소",
+    failed: "종료 실패",
+  },
 } as const;
 
 export type Locale = typeof ko;

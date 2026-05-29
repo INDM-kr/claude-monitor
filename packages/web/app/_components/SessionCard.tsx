@@ -9,6 +9,7 @@ import { SubAgentList } from "./SubAgentList";
 import { WidgetSlot } from "./WidgetSlot";
 import { RunnerBadge } from "./RunnerBadge";
 import { ContextBar } from "./ContextBar";
+import { KillButton } from "./KillButton";
 import { t } from "../../lib/i18n/t";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
@@ -58,6 +59,10 @@ export function SessionCard({ session }: { session: SessionSummary }) {
           └ {t("card.msg")}: <span className="text-zinc-400">{truncate(session.lastText, 120)}</span>
         </div>
       )}
+
+      <div className="flex justify-end pt-1">
+        <KillButton session={session} />
+      </div>
 
       <WidgetSlot slot="card-footer" session={session} />
     </article>
