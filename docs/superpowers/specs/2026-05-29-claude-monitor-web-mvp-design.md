@@ -95,11 +95,13 @@
 
 ### 프로젝트 통합 (신규 util — `packages/core/src/util/project-key.ts`)
 
+**⚠️ 입력은 반드시 transcript의 `cwd` 필드 (decoded 디렉토리명 아님).** `~/.claude/projects/<encoded>`의 `decodePath`는 `-`→`/` 전부 치환하는 비단사(non-injective) 변환이라 하이픈 포함 경로를 깨뜨린다 (예: `260507_gstack-ui` → `260507/gstack/ui`). 따라서 projectKey/owner는 **파서가 캡처한 `cwd`로 reader에서 계산**한다. watcher의 `refFromPath`는 임시값만 채우고 reader가 정정한다.
+
 `cwd → projectKey` 휴리스틱:
-- Conductor: `…/conductor/workspaces/<project>/<worktree>` → `projectKey = <project>` (예: `260507_gstack-ui`).
-- `.worktrees/<name>`: `<repo>/.worktrees/<name>` → `projectKey = <repo>`.
-- 그 외: 경로 그대로(또는 git toplevel) → `projectKey = cwd`.
-- 표시명 = `basename(projectKey)`. 순수 함수 → 테스트.
+- Conductor: `…/conductor/workspaces/<project>/<worktree>` → `key = conductor/<project>`, `label = <project>` (예: `260507_gstack-ui`).
+- `.worktrees/<name>`: `<repoAbs>/.worktrees/<name>` → `key = <repoAbs>`, `label = basename(repoAbs)`.
+- 그 외(평범 repo, worktree 형제 없음): `key = cwd`(전체), `label = basename(cwd)`. — 전체 경로를 키로 써 무관한 동명 디렉토리 오병합 방지.
+- `owner = /Users/<owner>/` 추출. 순수 함수 → 테스트.
 
 ### Kill (write 경로)
 
