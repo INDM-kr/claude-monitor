@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fold, initial, pendingSubagents, summarizeTodos } from "../parser.js";
+import { fold, initial, pendingSubagents, summarizeTodos, usageContextTokens } from "../parser.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -109,5 +109,37 @@ describe("parser fold — malformed line", () => {
   it("throws on invalid JSON (caller handles)", () => {
     const state = initial();
     expect(() => fold(state, "not json")).toThrow();
+  });
+});
+
+describe("parser metadata enrichment", () => {
+  it("최상위 cwd/gitBranch/version/permissionMode를 흡수", () => {
+    let s = initial();
+    s = fold(s, JSON.stringify({
+      type: "assistant",
+      cwd: "/Users/x/conductor/workspaces/proj/edinburgh",
+      gitBranch: "feature-1",
+      version: "2.1.156",
+      permissionMode: "plan",
+      message: { model: "claude-opus-4-8", usage: { input_tokens: 1, cache_read_input_tokens: 100, cache_creation_input_tokens: 9 }, content: [] },
+    }));
+    expect(s.cwd).toBe("/Users/x/conductor/workspaces/proj/edinburgh");
+    expect(s.gitBranch).toBe("feature-1");
+    expect(s.version).toBe("2.1.156");
+    expect(s.mode).toBe("plan");
+    expect(s.model).toBe("claude-opus-4-8");
+    expect(s.contextTokens).toBe(110);
+  });
+
+  it("<synthetic> 모델은 무시", () => {
+    let s = initial();
+    s = fold(s, JSON.stringify({ type: "assistant", message: { model: "claude-opus-4-8", content: [] } }));
+    s = fold(s, JSON.stringify({ type: "assistant", message: { model: "<synthetic>", content: [] } }));
+    expect(s.model).toBe("claude-opus-4-8");
+  });
+
+  it("usageContextTokens는 누락 필드를 0으로", () => {
+    expect(usageContextTokens({ input_tokens: 5 })).toBe(5);
+    expect(usageContextTokens({})).toBe(0);
   });
 });
