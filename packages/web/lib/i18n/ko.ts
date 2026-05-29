@@ -17,6 +17,15 @@ export const ko = {
     todoCurrent: "진행",
     todoNext: "다음",
     msg: "msg",
+    model: "모델",
+    mode: "모드",
+    context: "컨텍스트",
+  },
+  runner: {
+    conductor: "Conductor",
+    "claude-code": "Claude Code",
+    "claude-desktop": "Claude Desktop",
+    unknown: "—",
   },
   filter: {
     last1h: "1h",
