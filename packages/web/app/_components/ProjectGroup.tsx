@@ -1,39 +1,38 @@
 "use client";
 
-import { useState } from "react";
 import type { SessionSummary } from "@claude-monitor/core";
-import { ChevronDown, ChevronRight, Folder } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { SessionCard } from "./SessionCard";
 import { WidgetSlot } from "./WidgetSlot";
+import { useCollapsed } from "./useCollapsed";
 
 export function ProjectGroup({
-  workspace,
-  workspaceShort,
+  projectKey,
+  projectLabel,
   sessions,
 }: {
-  workspace: string;
-  workspaceShort: string;
+  projectKey: string;
+  projectLabel: string;
   sessions: SessionSummary[];
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, toggle] = useCollapsed(projectKey);
   return (
     <section className="space-y-2">
-      <header className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex items-center gap-1 text-zinc-300 hover:text-zinc-100"
-          aria-expanded={!collapsed}
+          onClick={toggle}
+          className="flex items-center gap-2 flex-1 text-left text-sm text-zinc-300 hover:text-zinc-100"
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          <Folder size={14} className="text-zinc-500" />
-          <span title={workspace}>{workspaceShort}</span>
+          <span className="font-medium">{projectLabel}</span>
+          <span className="text-xs text-zinc-500">({sessions.length})</span>
         </button>
-        <span className="text-xs text-zinc-500">{sessions.length}개 세션</span>
-      </header>
-      {sessions[0] && <WidgetSlot slot="project-header" session={sessions[0]} />}
+        {/* WidgetSlot은 button 밖 — <button> 안 <div>는 비유효 HTML */}
+        <WidgetSlot slot="project-header" session={sessions[0]!} />
+      </div>
       {!collapsed && (
-        <div className="space-y-2 pl-4">
+        <div className="space-y-2 pl-1">
           {sessions.map((s) => (
             <SessionCard key={`${s.ref.adapterId}::${s.ref.id}`} session={s} />
           ))}

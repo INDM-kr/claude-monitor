@@ -8,8 +8,8 @@ import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
 
 interface InitialGroup {
-  workspace: string;
-  workspaceShort: string;
+  projectKey: string;
+  projectLabel: string;
   sessions: SessionSummary[];
 }
 
@@ -49,7 +49,7 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
     return () => es.close();
   }, [upsert, remove, setConnected]);
 
-  const groups = useMemo(() => groupByWorkspace([...sessions.values()]), [sessions]);
+  const groups = useMemo(() => groupByProject([...sessions.values()]), [sessions]);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -64,9 +64,9 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
       ) : (
         groups.map((g) => (
           <ProjectGroup
-            key={g.workspace}
-            workspace={g.workspace}
-            workspaceShort={g.workspaceShort}
+            key={g.projectKey}
+            projectKey={g.projectKey}
+            projectLabel={g.projectLabel}
             sessions={g.sessions}
           />
         ))
@@ -82,13 +82,13 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
   );
 }
 
-function groupByWorkspace(list: SessionSummary[]): InitialGroup[] {
+function groupByProject(list: SessionSummary[]): InitialGroup[] {
   const map = new Map<string, InitialGroup>();
   for (const s of list) {
-    const key = s.ref.workspace;
+    const key = s.ref.projectKey;
     let g = map.get(key);
     if (!g) {
-      g = { workspace: s.ref.workspace, workspaceShort: s.ref.workspaceShort, sessions: [] };
+      g = { projectKey: key, projectLabel: s.ref.projectLabel, sessions: [] };
       map.set(key, g);
     }
     g.sessions.push(s);
