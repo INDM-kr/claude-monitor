@@ -7,9 +7,11 @@ import type {
   SessionRef,
   SessionSummary,
 } from "@claude-monitor/core";
+import { computeContext } from "@claude-monitor/core";
 import { ClaudeCodeAdapter } from "@claude-monitor/adapter-claude-code";
 import { getHub } from "../sse/hub";
 import { loadConfig } from "../config";
+import { probeProcesses } from "../process-probe";
 
 const DEBOUNCE_MS = 150;
 
@@ -60,9 +62,10 @@ export class LocalDataSource implements DataSource {
 
   async snapshot(): Promise<SessionSummary[]> {
     await this.ensureDiscovered();
-    return [...this.entries.values()]
+    const raw = [...this.entries.values()]
       .map((e) => e.lastSummary)
       .filter((s): s is SessionSummary => Boolean(s));
+    return Promise.all(raw.map((s) => this.enrich(s)));
   }
 
   async getById(adapterId: string, sessionId: string): Promise<SessionSummary | null> {
@@ -71,8 +74,9 @@ export class LocalDataSource implements DataSource {
     const e = this.entries.get(key);
     if (!e) return null;
     const fresh = await e.reader.readIncremental();
-    e.lastSummary = fresh;
-    return fresh;
+    const enriched = await this.enrich(fresh);
+    e.lastSummary = enriched;
+    return enriched;
   }
 
   async dispose(): Promise<void> {
@@ -86,6 +90,16 @@ export class LocalDataSource implements DataSource {
     await Promise.all(this._adapters.map((a) => a.dispose()));
   }
 
+  private async enrich(summary: SessionSummary): Promise<SessionSummary> {
+    const probe = await probeProcesses();
+    const e = probe.get(summary.ref.id);
+    if (!e) return summary;
+    const limit = e.contextLimit ?? summary.context?.limit ?? null;
+    const context =
+      summary.context && limit ? computeContext(summary.context.tokens, limit) : summary.context;
+    return { ...summary, runner: e.runner, pid: e.pid, context };
+  }
+
   private async runDiscover(): Promise<void> {
     for (const adapter of this._adapters) {
       const off = adapter.onChange((e) => this.handleAdapterEvent(adapter, e));
@@ -97,7 +111,8 @@ export class LocalDataSource implements DataSource {
     // Initial fan-out: prime all readers
     for (const entry of this.entries.values()) {
       try {
-        entry.lastSummary = await entry.reader.readIncremental();
+        const fresh = await entry.reader.readIncremental();
+        entry.lastSummary = await this.enrich(fresh);
       } catch {
         // ignore per-file failure
       }
@@ -153,8 +168,9 @@ export class LocalDataSource implements DataSource {
       entry.flushTimer = null;
       try {
         const summary = await entry.reader.readIncremental();
-        entry.lastSummary = summary;
-        getHub().publish({ kind: "summary", data: summary });
+        const enriched = await this.enrich(summary);
+        entry.lastSummary = enriched;
+        getHub().publish({ kind: "summary", data: enriched });
       } catch {
         // Ignore — next tick will retry on the next change.
       }
