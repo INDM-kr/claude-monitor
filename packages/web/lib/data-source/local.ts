@@ -12,6 +12,7 @@ import { ClaudeCodeAdapter } from "@claude-monitor/adapter-claude-code";
 import { getHub } from "../sse/hub";
 import { loadConfig } from "../config";
 import { probeProcesses } from "../process-probe";
+import { remoteProject } from "../git-remote";
 
 const DEBOUNCE_MS = 150;
 
@@ -91,13 +92,22 @@ export class LocalDataSource implements DataSource {
   }
 
   private async enrich(summary: SessionSummary): Promise<SessionSummary> {
+    // Group by the repo's origin remote URL when resolvable (unifies worktrees /
+    // clones of the same repo regardless of path). cwd gone / no remote → keep
+    // the reader's cwd-derived projectKey.
+    const remote = await remoteProject(summary.ref.workspace);
+    const ref: SessionRef = remote
+      ? { ...summary.ref, projectKey: remote.key, projectLabel: remote.label }
+      : summary.ref;
+
     const probe = await probeProcesses();
     const e = probe.get(summary.ref.id);
-    if (!e) return summary;
+    if (!e) return ref === summary.ref ? summary : { ...summary, ref };
+
     const limit = e.contextLimit ?? summary.context?.limit ?? null;
     const context =
       summary.context && limit ? computeContext(summary.context.tokens, limit) : summary.context;
-    return { ...summary, runner: e.runner, pid: e.pid, context };
+    return { ...summary, ref, runner: e.runner, pid: e.pid, context };
   }
 
   private async runDiscover(): Promise<void> {
