@@ -10,6 +10,7 @@ import { WidgetSlot } from "./WidgetSlot";
 import { RunnerBadge } from "./RunnerBadge";
 import { ContextBar } from "./ContextBar";
 import { KillButton } from "./KillButton";
+import { DismissButton } from "./DismissButton";
 import { t } from "../../lib/i18n/t";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
@@ -60,7 +61,8 @@ export function SessionCard({ session }: { session: SessionSummary }) {
         </div>
       )}
 
-      <div className="flex justify-end pt-1">
+      <div className="flex justify-end gap-3 pt-1">
+        <DismissButton session={session} />
         <KillButton session={session} />
       </div>
 

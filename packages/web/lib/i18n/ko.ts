@@ -53,6 +53,10 @@ export const ko = {
     no: "취소",
     failed: "종료 실패",
   },
+  dismiss: {
+    button: "숨기기",
+    restoreAll: "숨긴 세션 모두 보기",
+  },
 } as const;
 
 export type Locale = typeof ko;

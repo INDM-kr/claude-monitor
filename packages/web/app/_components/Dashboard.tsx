@@ -8,6 +8,7 @@ import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
+import { useDismissed, dismissKey } from "../../lib/dismissed";
 
 export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const setInitial = useSessionStore((s) => s.setInitial);
@@ -16,6 +17,11 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const setConnected = useSessionStore((s) => s.setConnected);
   const sessions = useSessionStore((s) => s.sessions);
   const connected = useSessionStore((s) => s.connected);
+  const dismissed = useDismissed((s) => s.dismissed);
+  const hydrateDismissed = useDismissed((s) => s.hydrate);
+  const restoreAll = useDismissed((s) => s.restoreAll);
+
+  useEffect(() => hydrateDismissed(), [hydrateDismissed]);
 
   useEffect(() => {
     const flat = initial.flatMap((g) => g.sessions);
@@ -59,14 +65,30 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
     return () => es.close();
   }, [upsert, remove, setConnected, setInitial]);
 
-  const groups = useMemo(() => groupByProject([...sessions.values()]), [sessions]);
+  const visible = useMemo(
+    () => [...sessions.values()].filter((s) => !dismissed.has(dismissKey(s))),
+    [sessions, dismissed],
+  );
+  const hiddenCount = sessions.size - visible.length;
+  const groups = useMemo(() => groupByProject(visible), [visible]);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
         <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
         <FilterBar />
-        {!connected && <div className="text-xs text-amber-400">{t("app.connectionLost")}</div>}
+        <div className="flex items-center gap-3">
+          {!connected && <span className="text-xs text-amber-400">{t("app.connectionLost")}</span>}
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={restoreAll}
+              className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+            >
+              {t("dismiss.restoreAll")} ({hiddenCount})
+            </button>
+          )}
+        </div>
       </header>
 
       {groups.length === 0 ? (
