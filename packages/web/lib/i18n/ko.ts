@@ -35,8 +35,6 @@ export const ko = {
   detail: {
     back: "← 대시보드",
     source: "소스",
-    branch: "브랜치",
-    version: "버전",
     usageTrend: "컨텍스트 추이",
     noUsage: "usage 데이터 없음",
     todos: "할 일",
