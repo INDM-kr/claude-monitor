@@ -12,10 +12,13 @@ export interface FilterOpts {
   maxAgeHours: number | null;
   all: boolean;
   filterGlob: string | null;
+  /** "live" | "idle" | "stop" to require that status; null = any */
+  status: string | null;
   now: number; // epoch seconds
 }
 
 export function sessionMatches(s: SessionSummary, o: FilterOpts): boolean {
+  if (o.status && s.status !== o.status) return false;
   if (!o.all && o.maxAgeHours != null && Number.isFinite(o.maxAgeHours)) {
     const cutoff = o.now - o.maxAgeHours * 3600;
     if (s.ref.mtime < cutoff) return false;

@@ -11,17 +11,18 @@ export type { ProjectGroupData };
 export default async function Page({
   searchParams,
 }: {
-  searchParams?: { maxAgeHours?: string; all?: string; filter?: string };
+  searchParams?: { maxAgeHours?: string; all?: string; filter?: string; status?: string };
 }) {
   const cfg = loadConfig();
   const all = searchParams?.all === "1";
   const maxAge = searchParams?.maxAgeHours ? Number(searchParams.maxAgeHours) : cfg.maxAgeHours;
   const filterGlob = searchParams?.filter ?? null;
+  const status = searchParams?.status || null;
 
   const ds = getDataSource();
   const now = Math.floor(Date.now() / 1000);
   const summaries = (await ds.snapshot()).filter((s) =>
-    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, now }),
+    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, status, now }),
   );
   const initial = groupByProject(summaries);
 

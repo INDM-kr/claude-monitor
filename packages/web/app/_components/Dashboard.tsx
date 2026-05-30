@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
 import { groupByProject, type ProjectGroupData } from "../../lib/group";
@@ -65,9 +66,14 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
     return () => es.close();
   }, [upsert, remove, setConnected, setInitial]);
 
+  const searchParams = useSearchParams();
+  const statusFilter = searchParams.get("status");
   const visible = useMemo(
-    () => [...sessions.values()].filter((s) => !dismissed.has(dismissKey(s))),
-    [sessions, dismissed],
+    () =>
+      [...sessions.values()].filter(
+        (s) => !dismissed.has(dismissKey(s)) && (!statusFilter || s.status === statusFilter),
+      ),
+    [sessions, dismissed, statusFilter],
   );
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);

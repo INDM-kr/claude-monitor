@@ -31,6 +31,11 @@ export const ko = {
     last7d: "7d",
     all: "전체",
     projectFilter: "프로젝트 필터",
+    status: "상태",
+    statusAll: "전체",
+    statusLive: "LIVE",
+    statusIdle: "idle",
+    statusStop: "stop",
   },
   detail: {
     back: "← 대시보드",
