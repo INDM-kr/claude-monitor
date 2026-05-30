@@ -1,6 +1,6 @@
 import { getDataSource } from "../lib/data-source/local";
 import { loadConfig } from "../lib/config";
-import { sessionMatches } from "../lib/filter";
+import { sessionMatches, parseStatuses } from "../lib/filter";
 import { groupByProject, type ProjectGroupData } from "../lib/group";
 import { Dashboard } from "./_components/Dashboard";
 
@@ -17,12 +17,12 @@ export default async function Page({
   const all = searchParams?.all === "1";
   const maxAge = searchParams?.maxAgeHours ? Number(searchParams.maxAgeHours) : cfg.maxAgeHours;
   const filterGlob = searchParams?.filter ?? null;
-  const status = searchParams?.status || null;
+  const statuses = parseStatuses(searchParams?.status);
 
   const ds = getDataSource();
   const now = Math.floor(Date.now() / 1000);
   const summaries = (await ds.snapshot()).filter((s) =>
-    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, status, now }),
+    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, statuses, now }),
   );
   const initial = groupByProject(summaries);
 

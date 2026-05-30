@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
 import { groupByProject, type ProjectGroupData } from "../../lib/group";
+import { parseStatuses } from "../../lib/filter";
 import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
@@ -67,14 +68,15 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   }, [upsert, remove, setConnected, setInitial]);
 
   const searchParams = useSearchParams();
-  const statusFilter = searchParams.get("status");
-  const visible = useMemo(
-    () =>
-      [...sessions.values()].filter(
-        (s) => !dismissed.has(dismissKey(s)) && (!statusFilter || s.status === statusFilter),
-      ),
-    [sessions, dismissed, statusFilter],
-  );
+  const statusParam = searchParams.get("status");
+  const visible = useMemo(() => {
+    const statuses = parseStatuses(statusParam);
+    return [...sessions.values()].filter(
+      (s) =>
+        !dismissed.has(dismissKey(s)) &&
+        (statuses.length === 0 || statuses.includes(s.status)),
+    );
+  }, [sessions, dismissed, statusParam]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);
 
