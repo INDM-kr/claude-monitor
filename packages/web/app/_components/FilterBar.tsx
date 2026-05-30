@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { t } from "../../lib/i18n/t";
+import { parseStatuses } from "../../lib/filter";
 
 const AGE_OPTIONS = [
   { label: "1h", value: "1" },
@@ -16,6 +17,20 @@ export function FilterBar() {
   const params = useSearchParams();
   const maxAge = params.get("maxAgeHours") ?? "24";
   const filter = params.get("filter") ?? "";
+  const selectedStatuses = new Set(parseStatuses(params.get("status")));
+
+  const statusOptions = [
+    { label: t("filter.statusLive"), value: "live" },
+    { label: t("filter.statusIdle"), value: "idle" },
+    { label: t("filter.statusStop"), value: "stop" },
+  ];
+
+  const toggleStatus = (value: string) => {
+    const next = new Set(selectedStatuses);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    update({ status: next.size ? [...next].join(",") : null });
+  };
 
   const update = useCallback(
     (next: Record<string, string | null>) => {
@@ -40,6 +55,32 @@ export function FilterBar() {
             onClick={() => update({ maxAgeHours: o.value || null, all: o.value ? null : "1" })}
             className={
               (o.value === maxAge ? "text-emerald-400 border-emerald-500/40" : "text-zinc-400 border-zinc-700") +
+              " border px-2 py-0.5 rounded text-xs hover:text-zinc-200"
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="text-zinc-500">{t("filter.status")}:</span>
+        <button
+          type="button"
+          onClick={() => update({ status: null })}
+          className={
+            (selectedStatuses.size === 0 ? "text-emerald-400 border-emerald-500/40" : "text-zinc-400 border-zinc-700") +
+            " border px-2 py-0.5 rounded text-xs hover:text-zinc-200"
+          }
+        >
+          {t("filter.statusAll")}
+        </button>
+        {statusOptions.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => toggleStatus(o.value)}
+            className={
+              (selectedStatuses.has(o.value) ? "text-emerald-400 border-emerald-500/40" : "text-zinc-400 border-zinc-700") +
               " border px-2 py-0.5 rounded text-xs hover:text-zinc-200"
             }
           >

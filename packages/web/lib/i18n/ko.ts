@@ -17,6 +17,13 @@ export const ko = {
     todoCurrent: "진행",
     todoNext: "다음",
     msg: "msg",
+    context: "컨텍스트",
+  },
+  runner: {
+    conductor: "Conductor",
+    "claude-code": "Claude Code",
+    "claude-desktop": "Claude Desktop",
+    unknown: "—",
   },
   filter: {
     last1h: "1h",
@@ -24,6 +31,36 @@ export const ko = {
     last7d: "7d",
     all: "전체",
     projectFilter: "프로젝트 필터",
+    status: "상태",
+    statusAll: "전체",
+    statusLive: "LIVE",
+    statusIdle: "idle",
+    statusStop: "stop",
+  },
+  detail: {
+    back: "← 대시보드",
+    source: "소스",
+    usageTrend: "컨텍스트 추이",
+    noUsage: "usage 데이터 없음",
+    todos: "할 일",
+    subagents: "대기 sub-agent",
+    lastMessage: "마지막 메시지",
+  },
+  errors: {
+    title: "문제가 발생했습니다",
+    retry: "다시 시도",
+    notFound: "세션을 찾을 수 없습니다",
+  },
+  kill: {
+    button: "kill",
+    confirm: "이 세션을 종료할까요?",
+    yes: "종료",
+    no: "취소",
+    failed: "종료 실패",
+  },
+  dismiss: {
+    button: "숨기기",
+    restoreAll: "숨긴 세션 모두 보기",
   },
 } as const;
 

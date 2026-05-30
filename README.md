@@ -1,16 +1,24 @@
 # claude-monitor
 
-Read-only dashboard for monitoring Claude Code (CCD) sessions across all projects on a single Mac. Scans `~/.claude/projects/*.jsonl` transcripts and groups by workspace, detects running sub-agents, and surfaces TodoWrite progress where present.
+Dashboard for monitoring Claude Code (CCD) sessions across all projects on a single Mac. Scans `~/.claude/projects/*.jsonl` transcripts, **unifies a project's worktrees into one collapsible group**, detects running sub-agents, and surfaces TodoWrite progress where present. Read-only **except** for one action: the web UI can **kill** a running local session (see [Web UI](#web-ui)).
 
 ## What it shows
 
-For every workspace under `~/.claude/projects/`:
+Sessions are grouped by **project** (Conductor worktrees and `.worktrees/` siblings of the same repo collapse into a single group, derived from each session's real `cwd` — not the lossy encoded directory name). Each group is collapsible (state persists in `localStorage`).
+
+Per session:
 
 - **Status** — `● LIVE` (transcript written in last 60s), `○ idle` (last 10m), `· stop` (older)
+- **Runner** — badge for `Conductor` / `Claude Code` / `Claude Desktop` (classified from the live process; absent if the process isn't found)
+- **Model · mode** — e.g. `claude-opus-4-8 · acceptEdits` (model from the transcript, mode = `permissionMode`)
+- **Context %** — approximate context-window occupancy (last assistant turn's input + cache tokens ÷ model limit; the `[1m]` 1M window is detected from the running process args, else a 200k default)
 - **Last tool** invoked in the most recent assistant turn
 - **Pending sub-agents** — `Task` / `Agent` tool calls without a matching `tool_result`
 - **TodoWrite snapshot** — `n/m completed`, current in-progress item, next pending item
 - **Last assistant message** — first 120 chars as context
+- **Kill** — terminates the session's local process (only shown when the process is found; web UI only)
+
+Click a session to open its **detail page**: full last message, full todo list, all pending sub-agents, source path, runner/model/mode/version, and a **context-usage trend** sparkline.
 
 ETA / time-remaining is intentionally not displayed: Claude does not write its own time estimates into the transcript, and synthesizing one would be a guess.
 
@@ -53,6 +61,14 @@ The Next.js server binds to `127.0.0.1` by default — LAN access is blocked. Se
 CM_BEARER_TOKEN=$(openssl rand -hex 32) ~/bin/claude-monitor-web
 # clients must send: Authorization: Bearer <token>
 ```
+
+### Killing sessions (the one write action)
+
+The **Kill** button (and `POST /api/sessions/[id]/kill`) terminates a session's local process with `SIGTERM`. It resolves the PID by scanning `ps` for the process whose args carry that session's `--resume`/`--session-id <uuid>`, and **re-verifies the PID's command line still belongs to that session immediately before signalling** (TOCTOU guard) so an unrelated/recycled process is never killed. Only **local** sessions on this machine are killable; the button is hidden when no matching process is found.
+
+Because this is a write action, keep the server on the default `127.0.0.1` bind. If you expose it to a LAN (`HOSTNAME=0.0.0.0`), **set `CM_BEARER_TOKEN`** — kill (and every API/page request) is then rejected without a valid `Authorization: Bearer` header.
+
+> **Known limitation:** when `CM_BEARER_TOKEN` is set, the browser UI cannot attach the token to its own requests (page navigation, the SSE stream, and the kill `fetch` all lack a way to send custom auth headers). So with a token set, the web UI's live updates and kill button stop working from the browser — they fail **closed** (blocked, never an unauthenticated kill). The token mode is meant for headless/programmatic clients that send the header themselves; for interactive local use, leave `CM_BEARER_TOKEN` unset (the `127.0.0.1` bind is the boundary).
 
 Tunables (all optional):
 

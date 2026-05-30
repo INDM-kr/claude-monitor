@@ -22,5 +22,10 @@ build/
 .env.*.local
 
 # Local Claude Code settings
-.claude/
+.claude/*
+# ...except shared gstack team-enforcement files
+!.claude/settings.json
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/check-gstack.sh
 

@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { AdapterEvent, SessionRef } from "@claude-monitor/core";
-import { decodePath, shortenWorkspace } from "@claude-monitor/core";
+import { decodePath, shortenWorkspace, projectIdentityFromCwd } from "@claude-monitor/core";
 
 export interface WatcherOptions {
   /** Absolute path to ~/.claude/projects (or test fixture root) */
@@ -103,11 +103,15 @@ export class ProjectsWatcher extends EventEmitter {
     if (!id) return null;
     const workspaceEncoded = workspaceEncodedFromPath(filePath, this.projectsDir);
     const workspace = decodePath(workspaceEncoded);
+    const provisional = projectIdentityFromCwd(workspace); // 임시 — reader가 cwd로 정정
     return {
       id,
       adapterId: "claude-code",
       workspace,
       workspaceShort: shortenWorkspace(workspace) || workspace,
+      projectKey: provisional.key,
+      projectLabel: provisional.label,
+      owner: provisional.owner,
       source: filePath,
       mtime: Math.floor(st.mtimeMs / 1000),
     };

@@ -1,25 +1,29 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
+import { groupByProject, type ProjectGroupData } from "../../lib/group";
+import { parseStatuses } from "../../lib/filter";
 import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
+import { fetchSnapshot } from "../../lib/sync";
+import { useDismissed, dismissKey } from "../../lib/dismissed";
 
-interface InitialGroup {
-  workspace: string;
-  workspaceShort: string;
-  sessions: SessionSummary[];
-}
-
-export function Dashboard({ initial }: { initial: InitialGroup[] }) {
+export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const setInitial = useSessionStore((s) => s.setInitial);
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
   const setConnected = useSessionStore((s) => s.setConnected);
   const sessions = useSessionStore((s) => s.sessions);
   const connected = useSessionStore((s) => s.connected);
+  const dismissed = useDismissed((s) => s.dismissed);
+  const hydrateDismissed = useDismissed((s) => s.hydrate);
+  const restoreAll = useDismissed((s) => s.restoreAll);
+
+  useEffect(() => hydrateDismissed(), [hydrateDismissed]);
 
   useEffect(() => {
     const flat = initial.flatMap((g) => g.sessions);
@@ -27,6 +31,7 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
   }, [initial, setInitial]);
 
   useEffect(() => {
+    let wasErrored = false;
     const es = new EventSource("/api/events");
     es.addEventListener("summary", (e) => {
       try {
@@ -44,19 +49,54 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
       }
     });
     es.addEventListener("heartbeat", () => setConnected(true));
-    es.onopen = () => setConnected(true);
-    es.onerror = () => setConnected(false);
+    es.onopen = () => {
+      setConnected(true);
+      if (wasErrored) {
+        wasErrored = false;
+        fetchSnapshot()
+          .then((list) => setInitial(list))
+          .catch(() => {
+            /* 다음 틱에 재시도 */
+          });
+      }
+    };
+    es.onerror = () => {
+      wasErrored = true;
+      setConnected(false);
+    };
     return () => es.close();
-  }, [upsert, remove, setConnected]);
+  }, [upsert, remove, setConnected, setInitial]);
 
-  const groups = useMemo(() => groupByWorkspace([...sessions.values()]), [sessions]);
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status");
+  const visible = useMemo(() => {
+    const statuses = parseStatuses(statusParam);
+    return [...sessions.values()].filter(
+      (s) =>
+        !dismissed.has(dismissKey(s)) &&
+        (statuses.length === 0 || statuses.includes(s.status)),
+    );
+  }, [sessions, dismissed, statusParam]);
+  const hiddenCount = sessions.size - visible.length;
+  const groups = useMemo(() => groupByProject(visible), [visible]);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
         <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
         <FilterBar />
-        {!connected && <div className="text-xs text-amber-400">{t("app.connectionLost")}</div>}
+        <div className="flex items-center gap-3">
+          {!connected && <span className="text-xs text-amber-400">{t("app.connectionLost")}</span>}
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={restoreAll}
+              className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+            >
+              {t("dismiss.restoreAll")} ({hiddenCount})
+            </button>
+          )}
+        </div>
       </header>
 
       {groups.length === 0 ? (
@@ -64,9 +104,9 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
       ) : (
         groups.map((g) => (
           <ProjectGroup
-            key={g.workspace}
-            workspace={g.workspace}
-            workspaceShort={g.workspaceShort}
+            key={g.projectKey}
+            projectKey={g.projectKey}
+            projectLabel={g.projectLabel}
             sessions={g.sessions}
           />
         ))
@@ -80,23 +120,4 @@ export function Dashboard({ initial }: { initial: InitialGroup[] }) {
       </footer>
     </main>
   );
-}
-
-function groupByWorkspace(list: SessionSummary[]): InitialGroup[] {
-  const map = new Map<string, InitialGroup>();
-  for (const s of list) {
-    const key = s.ref.workspace;
-    let g = map.get(key);
-    if (!g) {
-      g = { workspace: s.ref.workspace, workspaceShort: s.ref.workspaceShort, sessions: [] };
-      map.set(key, g);
-    }
-    g.sessions.push(s);
-  }
-  for (const g of map.values()) g.sessions.sort((a, b) => b.ref.mtime - a.ref.mtime);
-  return [...map.values()].sort((a, b) => {
-    const am = Math.max(...a.sessions.map((s) => s.ref.mtime));
-    const bm = Math.max(...b.sessions.map((s) => s.ref.mtime));
-    return bm - am;
-  });
 }

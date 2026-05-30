@@ -22,6 +22,14 @@ export interface ParserState {
   lastText: string | null;
   /** byte offset of the next unread byte in the source file */
   byteOffset: number;
+  // --- metadata enrichment ---
+  cwd: string | null;
+  gitBranch: string | null;
+  version: string | null;
+  entrypoint: string | null;
+  mode: string | null;
+  model: string | null;
+  contextTokens: number | null;
 }
 
 export function initial(): ParserState {
@@ -32,12 +40,26 @@ export function initial(): ParserState {
     lastTodos: null,
     lastText: null,
     byteOffset: 0,
+    cwd: null,
+    gitBranch: null,
+    version: null,
+    entrypoint: null,
+    mode: null,
+    model: null,
+    contextTokens: null,
   };
 }
 
 export interface ParsedLine {
   type?: string;
+  cwd?: string;
+  gitBranch?: string;
+  version?: string;
+  entrypoint?: string;
+  permissionMode?: string;
   message?: {
+    model?: string;
+    usage?: Record<string, unknown>;
     content?: Array<Record<string, unknown>>;
   };
 }
@@ -51,6 +73,18 @@ export interface ParsedLine {
 export function fold(state: ParserState, line: string): ParserState {
   const obj = JSON.parse(line) as ParsedLine;
   const content = Array.isArray(obj?.message?.content) ? obj.message!.content! : [];
+
+  if (typeof obj.cwd === "string") state.cwd = obj.cwd;
+  if (typeof obj.gitBranch === "string") state.gitBranch = obj.gitBranch;
+  if (typeof obj.version === "string") state.version = obj.version;
+  if (typeof obj.entrypoint === "string") state.entrypoint = obj.entrypoint;
+  if (typeof obj.permissionMode === "string") state.mode = obj.permissionMode;
+
+  const msg = obj.message;
+  if (msg) {
+    if (typeof msg.model === "string" && msg.model !== "<synthetic>") state.model = msg.model;
+    if (msg.usage) state.contextTokens = usageContextTokens(msg.usage);
+  }
 
   if (obj?.type === "assistant") {
     for (const c of content) {
@@ -108,4 +142,9 @@ export function pendingSubagents(state: ParserState): PendingSubagent[] {
     if (!state.resolvedToolIds.has(id)) out.push({ id, desc });
   }
   return out;
+}
+
+export function usageContextTokens(u: Record<string, unknown>): number {
+  const n = (k: string): number => (typeof u[k] === "number" ? (u[k] as number) : 0);
+  return n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens");
 }

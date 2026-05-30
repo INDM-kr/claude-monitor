@@ -30,6 +30,9 @@ function mkRef(source: string): SessionRef {
     adapterId: "claude-code",
     workspace: "/tmp/ws",
     workspaceShort: "ws",
+    projectKey: "/tmp/ws",
+    projectLabel: "ws",
+    owner: "unknown",
     source,
     mtime: Math.floor(Date.now() / 1000),
   };
@@ -101,5 +104,32 @@ describe("ClaudeCodeReader incremental tail", () => {
     );
     const s2 = await r.readIncremental();
     expect(s2.pendingSubagents).toHaveLength(2);
+  });
+
+  it("cwd로 ref(projectKey/label/owner/workspace)를 정정하고 메타를 채운다", async () => {
+    const enriched = JSON.stringify({
+      type: "assistant",
+      cwd: "/Users/kim/conductor/workspaces/proj-x/lisbon",
+      gitBranch: "main",
+      version: "2.1.156",
+      permissionMode: "acceptEdits",
+      message: {
+        model: "claude-opus-4-8",
+        usage: { input_tokens: 2, cache_read_input_tokens: 98, cache_creation_input_tokens: 0 },
+        content: [{ type: "text", text: "hello" }],
+      },
+    });
+    await fs.writeFile(file, enriched + "\n");
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.ref.workspace).toBe("/Users/kim/conductor/workspaces/proj-x/lisbon");
+    expect(sum.ref.projectKey).toBe("conductor/proj-x");
+    expect(sum.ref.projectLabel).toBe("proj-x");
+    expect(sum.ref.owner).toBe("kim");
+    expect(sum.model).toBe("claude-opus-4-8");
+    expect(sum.mode).toBe("acceptEdits");
+    expect(sum.version).toBe("2.1.156");
+    expect(sum.context).toEqual({ tokens: 100, limit: 200_000, pct: 100 / 200_000 });
+    expect(sum.runner).toBe("unknown");
+    expect(sum.pid).toBeNull();
   });
 });
