@@ -13,10 +13,11 @@ export function DismissButton({ session }: { session: SessionSummary }) {
     <button
       type="button"
       onClick={() => dismiss(dismissKey(session))}
-      className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
+      className="text-zinc-500 hover:text-zinc-300"
       title={t("dismiss.button")}
+      aria-label={t("dismiss.button")}
     >
-      <EyeOff size={12} /> {t("dismiss.button")}
+      <EyeOff size={14} />
     </button>
   );
 }

@@ -51,10 +51,11 @@ export function KillButton({ session }: { session: SessionSummary }) {
     <button
       type="button"
       onClick={() => setConfirming(true)}
-      className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400"
+      className="text-zinc-500 hover:text-red-400"
       title={t("kill.button")}
+      aria-label={t("kill.button")}
     >
-      <Skull size={12} /> {t("kill.button")}
+      <Skull size={14} />
     </button>
   );
 }
