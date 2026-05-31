@@ -23,6 +23,7 @@ export const ko = {
     conductor: "Conductor",
     "claude-code": "Claude Code",
     "claude-desktop": "Claude Desktop",
+    agent: "Agent",
     unknown: "—",
   },
   filter: {

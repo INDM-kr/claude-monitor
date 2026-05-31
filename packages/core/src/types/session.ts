@@ -1,6 +1,6 @@
 export type SessionStatus = "live" | "idle" | "stop";
 
-export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "unknown";
+export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
 
 export interface ContextUsage {
   /** 추정 컨텍스트 점유 토큰 (input + cache_read + cache_creation) */

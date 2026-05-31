@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import type { SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
-import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext } from "@claude-monitor/core";
+import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
 import { fold, initial, pendingSubagents, summarizeTodos, type ParserState } from "./parser.js";
 
 export interface ReaderOptions {
@@ -69,7 +69,7 @@ export class ClaudeCodeReader implements SessionReader {
       pendingSubagents: pendingSubagents(this.state),
       todo: summarizeTodos(this.state.lastTodos),
       lastText: this.state.lastText,
-      runner: "unknown",
+      runner: runnerFromEntrypoint(this.state.entrypoint, baseRef.workspace),
       model: this.state.model,
       mode: this.state.mode,
       version: this.state.version,

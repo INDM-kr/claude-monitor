@@ -107,7 +107,11 @@ export class LocalDataSource implements DataSource {
     const limit = e.contextLimit ?? summary.context?.limit ?? null;
     const context =
       summary.context && limit ? computeContext(summary.context.tokens, limit) : summary.context;
-    return { ...summary, ref, runner: e.runner, pid: e.pid, context };
+    // Live probe wins only when it positively classified the runner; otherwise
+    // keep the reader's entrypoint-derived fallback (so stopped/unclassified
+    // live procs still show a badge).
+    const runner = e.runner !== "unknown" ? e.runner : summary.runner;
+    return { ...summary, ref, runner, pid: e.pid, context };
   }
 
   private async runDiscover(): Promise<void> {
