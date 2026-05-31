@@ -3,6 +3,8 @@
 import Link from "next/link";
 import type { SessionSummary } from "@claude-monitor/core";
 import { ago, shortSid, truncate } from "@claude-monitor/core";
+import { useSessionStore } from "../../lib/store";
+import { deriveStatus } from "../../lib/derive-status";
 import { StatusBadge } from "./StatusBadge";
 import { TodoProgress } from "./TodoProgress";
 import { SubAgentList } from "./SubAgentList";
@@ -14,7 +16,11 @@ import { DismissButton } from "./DismissButton";
 import { t } from "../../lib/i18n/t";
 
 export function SessionCard({ session }: { session: SessionSummary }) {
-  const age = Math.max(0, Math.floor(Date.now() / 1000) - session.ref.mtime);
+  // Derive status/age from the ticking client clock (not the frozen
+  // session.status baked in at read time) so LIVE→idle→stop decays in place.
+  const now = useSessionStore((s) => s.now);
+  const age = Math.max(0, now - session.ref.mtime);
+  const status = deriveStatus(now, session.ref.mtime);
   return (
     <article className="relative rounded-md border border-border-subtle bg-bg-card px-4 py-3">
       {/* 액션 버튼: 박스 우측 상단 고정 */}
@@ -27,7 +33,7 @@ export function SessionCard({ session }: { session: SessionSummary }) {
         {/* 좌: 정체성·상태·모델·컨텍스트 */}
         <div className="min-w-0 space-y-2 sm:flex-1">
           <header className="flex flex-wrap items-center gap-3 pr-14 text-sm">
-            <StatusBadge status={session.status} />
+            <StatusBadge status={status} />
             <Link
               href={`/session/${session.ref.id}?adapter=${session.ref.adapterId}`}
               className="text-cyan-400 hover:underline"

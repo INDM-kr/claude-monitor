@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { promises as fs } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { AdapterEvent, SessionRef } from "@claude-monitor/core";
 import { decodePath, shortenWorkspace, projectIdentityFromCwd } from "@claude-monitor/core";
@@ -39,7 +39,7 @@ export class ProjectsWatcher extends EventEmitter {
       persistent: true,
       ignoreInitial: false,
       awaitWriteFinish: false,
-      ignored: (p) => /(^|\/)\.[^/]/.test(p),
+      ignored: (p) => isIgnoredWatchPath(this.projectsDir, p),
     });
 
     this.watcher.on("add", (path) => this.handleAdd(path));
@@ -116,6 +116,19 @@ export class ProjectsWatcher extends EventEmitter {
       mtime: Math.floor(st.mtimeMs / 1000),
     };
   }
+}
+
+/**
+ * chokidar passes ABSOLUTE paths to `ignored`. Judge hidden-ness by the segment
+ * *relative to* projectsDir — otherwise a dot in an ancestor (e.g. the `.claude`
+ * in `~/.claude/projects`) matches the whole tree and chokidar silently ignores
+ * every session file (no live updates). Only hidden segments *inside* the
+ * watched tree should be ignored.
+ */
+export function isIgnoredWatchPath(projectsDir: string, p: string): boolean {
+  const rel = relative(projectsDir, p);
+  if (rel === "" || rel.startsWith("..")) return false; // root / outside → never ignore
+  return rel.split(sep).some((seg) => seg.startsWith("."));
 }
 
 function sessionIdFromPath(p: string): string | null {

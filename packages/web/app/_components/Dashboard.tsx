@@ -6,6 +6,7 @@ import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
 import { groupByProject, type ProjectGroupData } from "../../lib/group";
 import { parseStatuses } from "../../lib/filter";
+import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
@@ -17,13 +18,22 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
   const setConnected = useSessionStore((s) => s.setConnected);
+  const tick = useSessionStore((s) => s.tick);
   const sessions = useSessionStore((s) => s.sessions);
+  const now = useSessionStore((s) => s.now);
   const connected = useSessionStore((s) => s.connected);
   const dismissed = useDismissed((s) => s.dismissed);
   const hydrateDismissed = useDismissed((s) => s.hydrate);
   const restoreAll = useDismissed((s) => s.restoreAll);
 
   useEffect(() => hydrateDismissed(), [hydrateDismissed]);
+
+  // Client clock: advances time-relative UI (status decay, "X ago") between SSE
+  // events. Without it, a session that stops writing stays "● LIVE / 2s ago".
+  useEffect(() => {
+    const id = setInterval(() => tick(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [tick]);
 
   useEffect(() => {
     const flat = initial.flatMap((g) => g.sessions);
@@ -71,12 +81,13 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const statusParam = searchParams.get("status");
   const visible = useMemo(() => {
     const statuses = parseStatuses(statusParam);
-    return [...sessions.values()].filter(
-      (s) =>
-        !dismissed.has(dismissKey(s)) &&
-        (statuses.length === 0 || statuses.includes(s.status)),
-    );
-  }, [sessions, dismissed, statusParam]);
+    return [...sessions.values()].filter((s) => {
+      if (dismissed.has(dismissKey(s))) return false;
+      // Derive from the live clock — must match the badge in SessionCard, not
+      // the frozen summary.status, or "stop" sessions leak into the idle filter.
+      return statuses.length === 0 || statuses.includes(deriveStatus(now, s.ref.mtime));
+    });
+  }, [sessions, dismissed, statusParam, now]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);
 
