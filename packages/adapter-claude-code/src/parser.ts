@@ -12,8 +12,8 @@ interface TodoItem {
 
 export interface ParserState {
   lastToolName: string | null;
-  /** Task/Agent calls only — id → desc */
-  toolCallsById: Map<string, { name: string; desc: string }>;
+  /** Task/Agent calls only — id → desc/type */
+  toolCallsById: Map<string, { name: string; desc: string; type: string | null }>;
   /** tool_use ids that have received a tool_result */
   resolvedToolIds: Set<string>;
   /** latest TodoWrite snapshot */
@@ -96,7 +96,8 @@ export function fold(state: ParserState, line: string): ParserState {
           const input = (c.input ?? {}) as Record<string, unknown>;
           const rawDesc = input.description ?? input.subagent_type ?? "agent";
           const desc = String(rawDesc).slice(0, SUBAGENT_DESC_MAX);
-          state.toolCallsById.set(id, { name, desc });
+          const type = typeof input.subagent_type === "string" ? input.subagent_type : null;
+          state.toolCallsById.set(id, { name, desc, type });
         }
         if (name === TODO_TOOL) {
           const input = (c.input ?? {}) as { todos?: TodoItem[] };
@@ -138,8 +139,8 @@ export function summarizeTodos(todos: TodoItem[] | null): TodoSnapshot | null {
 
 export function pendingSubagents(state: ParserState): PendingSubagent[] {
   const out: PendingSubagent[] = [];
-  for (const [id, { desc }] of state.toolCallsById) {
-    if (!state.resolvedToolIds.has(id)) out.push({ id, desc });
+  for (const [id, { desc, type }] of state.toolCallsById) {
+    if (!state.resolvedToolIds.has(id)) out.push({ id, desc, type });
   }
   return out;
 }

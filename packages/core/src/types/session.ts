@@ -35,6 +35,8 @@ export interface SessionRef {
 export interface PendingSubagent {
   id: string;
   desc: string;
+  /** subagent_type from the Task/Agent tool input, when present (e.g. "Explore"). */
+  type: string | null;
 }
 
 export interface TodoSnapshot {

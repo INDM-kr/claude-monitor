@@ -44,6 +44,7 @@ describe("parser fold — pending-subagent.jsonl", () => {
     expect(pending).toHaveLength(1);
     expect(pending[0]?.id).toBe("tu_b");
     expect(pending[0]?.desc).toBe("map data sources");
+    expect(pending[0]?.type).toBe("Explore");
   });
 
   it("lastToolName is Agent (the last tool_use)", () => {
@@ -70,6 +71,7 @@ describe("parser fold — pending-subagent.jsonl", () => {
       }),
     );
     expect(pendingSubagents(state)[0]?.desc.length).toBe(40);
+    expect(pendingSubagents(state)[0]?.type).toBeNull();
   });
 });
 
