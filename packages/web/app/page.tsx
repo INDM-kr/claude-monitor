@@ -1,7 +1,7 @@
 import { getDataSource } from "../lib/data-source/local";
 import { loadConfig } from "../lib/config";
 import { sessionMatches, parseStatuses } from "../lib/filter";
-import { groupByProject, type ProjectGroupData } from "../lib/group";
+import type { ProjectGroupData } from "../lib/group";
 import { Dashboard } from "./_components/Dashboard";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,8 @@ export default async function Page({
   const summaries = (await ds.snapshot()).filter((s) =>
     sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, statuses, now }),
   );
-  const initial = groupByProject(summaries);
 
-  return <Dashboard initial={initial} />;
+  // Seed the store with the flat list (incl. child sub-agent sessions); the
+  // Dashboard groups roots and nests children client-side.
+  return <Dashboard initial={summaries} />;
 }

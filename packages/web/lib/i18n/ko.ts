@@ -7,6 +7,8 @@ export const ko = {
     legendStop: "stop",
     noSessions: "활동 세션 없음",
     connectionLost: "연결 끊김 — 재연결 중…",
+    orphanAgents: "부모 세션 외 하위 에이전트",
+    parentHidden: "부모 미표시",
     showAll: "전체",
     maxAge: "최근",
   },

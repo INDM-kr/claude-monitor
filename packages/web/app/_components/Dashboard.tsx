@@ -4,16 +4,17 @@ import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
-import { groupByProject, childrenByParent, type ProjectGroupData } from "../../lib/group";
+import { groupByProject, childrenByParent } from "../../lib/group";
 import { parseStatuses } from "../../lib/filter";
 import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
+import { OrphanChildren } from "./OrphanChildren";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
 import { useDismissed, dismissKey } from "../../lib/dismissed";
 
-export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
+export function Dashboard({ initial }: { initial: SessionSummary[] }) {
   const setInitial = useSessionStore((s) => s.setInitial);
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
@@ -36,8 +37,7 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   }, [tick]);
 
   useEffect(() => {
-    const flat = initial.flatMap((g) => g.sessions);
-    setInitial(flat);
+    setInitial(initial);
   }, [initial, setInitial]);
 
   useEffect(() => {
@@ -93,6 +93,14 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   // Child (sub-agent) sessions render nested under their parent card, not as
   // top-level cards. groupByProject already excludes them from the groups.
   const childMap = useMemo(() => childrenByParent(visible), [visible]);
+  // Orphans: visible children whose parent isn't a visible root (filtered out
+  // by status/age). Surfaced under a synthetic parent header, never dropped.
+  const orphans = useMemo(() => {
+    const rootIds = new Set(visible.filter((s) => !s.ref.parentId).map((s) => s.ref.id));
+    return [...childMap.entries()]
+      .filter(([parentId]) => !rootIds.has(parentId))
+      .map(([parentId, children]) => ({ parentId, children }));
+  }, [visible, childMap]);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -113,18 +121,21 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
         </div>
       </header>
 
-      {groups.length === 0 ? (
+      {groups.length === 0 && orphans.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
-        groups.map((g) => (
-          <ProjectGroup
-            key={g.projectKey}
-            projectKey={g.projectKey}
-            projectLabel={g.projectLabel}
-            sessions={g.sessions}
-            childrenByParent={childMap}
-          />
-        ))
+        <>
+          {groups.map((g) => (
+            <ProjectGroup
+              key={g.projectKey}
+              projectKey={g.projectKey}
+              projectLabel={g.projectLabel}
+              sessions={g.sessions}
+              childrenByParent={childMap}
+            />
+          ))}
+          <OrphanChildren groups={orphans} />
+        </>
       )}
 
       <footer className="text-xs text-zinc-600 pt-4 border-t border-border-subtle">
