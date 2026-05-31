@@ -64,7 +64,10 @@ export function SessionCard({ session }: { session: SessionSummary }) {
         <div className="min-w-0 space-y-2 sm:flex-1 sm:pr-10">
           {session.lastTool && (
             <div className="pl-1 text-xs text-amber-400/90">
-              {t("card.tool")}: <span className="text-amber-300">{session.lastTool}</span>
+              {t("card.activity")}: <span className="text-amber-300">{session.lastTool}</span>
+              {session.lastActivityDetail && (
+                <span className="text-amber-200/80"> — {truncate(session.lastActivityDetail, 60)}</span>
+              )}
             </div>
           )}
 

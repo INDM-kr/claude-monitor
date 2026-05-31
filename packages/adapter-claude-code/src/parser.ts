@@ -1,9 +1,11 @@
+import { basename } from "node:path";
 import type { PendingSubagent, TodoSnapshot } from "@claude-monitor/core";
 
 const SUBAGENT_TOOLS = new Set(["Task", "Agent"]);
 const TODO_TOOL = "TodoWrite";
 const LAST_TEXT_MAX = 200;
 const SUBAGENT_DESC_MAX = 40;
+const ACTIVITY_DETAIL_MAX = 60;
 
 interface TodoItem {
   status: string;
@@ -12,6 +14,8 @@ interface TodoItem {
 
 export interface ParserState {
   lastToolName: string | null;
+  /** Salient target of the last tool call (see salientDetail). */
+  lastActivityDetail: string | null;
   /** Task/Agent calls only — id → desc/type */
   toolCallsById: Map<string, { name: string; desc: string; type: string | null }>;
   /** tool_use ids that have received a tool_result */
@@ -35,6 +39,7 @@ export interface ParserState {
 export function initial(): ParserState {
   return {
     lastToolName: null,
+    lastActivityDetail: null,
     toolCallsById: new Map(),
     resolvedToolIds: new Set(),
     lastTodos: null,
@@ -91,7 +96,10 @@ export function fold(state: ParserState, line: string): ParserState {
       if (c.type === "tool_use") {
         const name = String(c.name ?? "");
         const id = String(c.id ?? "");
-        if (name) state.lastToolName = name;
+        if (name) {
+          state.lastToolName = name;
+          state.lastActivityDetail = salientDetail(name, (c.input ?? {}) as Record<string, unknown>);
+        }
         if (SUBAGENT_TOOLS.has(name) && id) {
           const input = (c.input ?? {}) as Record<string, unknown>;
           const rawDesc = input.description ?? input.subagent_type ?? "agent";
@@ -122,6 +130,40 @@ export function fold(state: ParserState, line: string): ParserState {
   }
 
   return state;
+}
+
+/**
+ * Human-readable target of a tool call — "what it's doing now" beyond the bare
+ * tool name. Returns null when no useful target exists (truncated to 60 chars).
+ */
+export function salientDetail(name: string, input: Record<string, unknown>): string | null {
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+  let detail: string | null;
+  switch (name) {
+    case "Bash":
+      detail = str(input.description) ?? str(input.command);
+      break;
+    case "Edit":
+    case "Write":
+    case "Read":
+    case "NotebookEdit": {
+      const p = str(input.file_path) ?? str(input.notebook_path);
+      detail = p ? basename(p) : null;
+      break;
+    }
+    case "Grep":
+    case "Glob":
+      detail = str(input.pattern);
+      break;
+    case "Task":
+    case "Agent":
+      detail = str(input.description) ?? str(input.subagent_type);
+      break;
+    default:
+      detail = null;
+  }
+  return detail ? detail.slice(0, ACTIVITY_DETAIL_MAX) : null;
 }
 
 export function summarizeTodos(todos: TodoItem[] | null): TodoSnapshot | null {

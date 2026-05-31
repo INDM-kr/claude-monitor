@@ -66,6 +66,7 @@ export class ClaudeCodeReader implements SessionReader {
       ref: baseRef,
       status: statusFromMtime(mtimeSec, now, this.thresholds),
       lastTool: this.state.lastToolName,
+      lastActivityDetail: this.state.lastActivityDetail,
       pendingSubagents: pendingSubagents(this.state),
       todo: summarizeTodos(this.state.lastTodos),
       lastText: this.state.lastText,

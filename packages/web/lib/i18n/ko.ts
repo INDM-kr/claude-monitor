@@ -12,6 +12,7 @@ export const ko = {
   },
   card: {
     tool: "도구",
+    activity: "현재 작업",
     subagent: "sub-agent",
     todo: "todo",
     todoCurrent: "진행",

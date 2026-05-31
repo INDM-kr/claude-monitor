@@ -50,6 +50,9 @@ export interface SessionSummary {
   ref: SessionRef;
   status: SessionStatus;
   lastTool: string | null;
+  /** Salient target of the last tool call (Bash description, edited file, grep
+   *  pattern…) — "what it's doing now", beyond the bare tool name. */
+  lastActivityDetail?: string | null;
   pendingSubagents: PendingSubagent[];
   todo: TodoSnapshot | null;
   /** Last assistant text, truncated to 200 chars to match CLI behavior */

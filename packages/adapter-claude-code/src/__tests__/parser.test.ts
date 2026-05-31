@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fold, initial, pendingSubagents, summarizeTodos, usageContextTokens } from "../parser.js";
+import { fold, initial, pendingSubagents, salientDetail, summarizeTodos, usageContextTokens } from "../parser.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -143,5 +143,42 @@ describe("parser metadata enrichment", () => {
   it("usageContextTokens는 누락 필드를 0으로", () => {
     expect(usageContextTokens({ input_tokens: 5 })).toBe(5);
     expect(usageContextTokens({})).toBe(0);
+  });
+});
+
+describe("parser fold — lastActivityDetail (Feature D)", () => {
+  it("salientDetail: Bash uses description, falls back to command", () => {
+    expect(salientDetail("Bash", { description: "run tests", command: "pnpm test" })).toBe("run tests");
+    expect(salientDetail("Bash", { command: "ls -la" })).toBe("ls -la");
+  });
+
+  it("salientDetail: file tools use basename", () => {
+    expect(salientDetail("Edit", { file_path: "/a/b/SessionCard.tsx" })).toBe("SessionCard.tsx");
+    expect(salientDetail("Read", { file_path: "/x/y/reader.ts" })).toBe("reader.ts");
+  });
+
+  it("salientDetail: Grep/Glob use pattern; Task uses description", () => {
+    expect(salientDetail("Grep", { pattern: "foo.*bar" })).toBe("foo.*bar");
+    expect(salientDetail("Task", { description: "explore", subagent_type: "Explore" })).toBe("explore");
+  });
+
+  it("salientDetail: unknown tool or no target → null; truncates to 60", () => {
+    expect(salientDetail("WeirdTool", { x: 1 })).toBeNull();
+    expect(salientDetail("Bash", {})).toBeNull();
+    expect(salientDetail("Bash", { command: "x".repeat(100) })?.length).toBe(60);
+  });
+
+  it("fold sets lastActivityDetail on a tool_use; initial is null", () => {
+    expect(initial().lastActivityDetail).toBeNull();
+    let s = initial();
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { description: "build dist" } }] },
+      }),
+    );
+    expect(s.lastToolName).toBe("Bash");
+    expect(s.lastActivityDetail).toBe("build dist");
   });
 });
