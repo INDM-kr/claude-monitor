@@ -1,9 +1,14 @@
 import { EventEmitter } from "node:events";
 import { promises as fs } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { AdapterEvent, SessionRef } from "@claude-monitor/core";
-import { decodePath, shortenWorkspace, projectIdentityFromCwd } from "@claude-monitor/core";
+import {
+  decodePath,
+  shortenWorkspace,
+  projectIdentityFromCwd,
+  parentInfoFromSubagentPath,
+} from "@claude-monitor/core";
 
 export interface WatcherOptions {
   /** Absolute path to ~/.claude/projects (or test fixture root) */
@@ -11,6 +16,7 @@ export interface WatcherOptions {
 }
 
 const SESSION_FILE_RE = /\.jsonl$/i;
+const AGENT_FILE_RE = /^agent-[^/]+\.jsonl$/i;
 
 /**
  * Watches ~/.claude/projects/* for session files.
@@ -26,6 +32,10 @@ const SESSION_FILE_RE = /\.jsonl$/i;
  */
 export class ProjectsWatcher extends EventEmitter {
   private watcher: FSWatcher | null = null;
+  /** Dedicated watcher for discovered `<UUID>/subagents` subtrees — kept off
+   *  the main depth:2 watch so we don't widen it over every project dir. */
+  private subWatcher: FSWatcher | null = null;
+  private readonly subDirs = new Set<string>();
   private readonly projectsDir: string;
 
   constructor(opts: WatcherOptions) {
@@ -52,6 +62,11 @@ export class ProjectsWatcher extends EventEmitter {
       await this.watcher.close();
       this.watcher = null;
     }
+    if (this.subWatcher) {
+      await this.subWatcher.close();
+      this.subWatcher = null;
+    }
+    this.subDirs.clear();
   }
 
   emitEvent(event: AdapterEvent): void {
@@ -72,15 +87,20 @@ export class ProjectsWatcher extends EventEmitter {
     if (!SESSION_FILE_RE.test(path)) return;
     const ref = await this.refFromPath(path);
     if (ref) this.emitEvent({ kind: "changed", ref });
+    // A top-level parent writing → it may have just spawned its first
+    // sub-agents. Lazily start watching that subagents dir (cheap once known).
+    if (ref && !ref.parentId) await this.maybeWatchSubagents(path);
   }
 
   private handleUnlink(path: string): void {
     if (!SESSION_FILE_RE.test(path)) return;
-    const refId = sessionIdFromPath(path);
+    const sub = parentInfoFromSubagentPath(this.projectsDir, path);
+    const refId = sub ? sub.childId : sessionIdFromPath(path);
     if (refId) this.emitEvent({ kind: "removed", refId });
   }
 
-  /** Initial scan — yields refs for everything currently on disk. */
+  /** Initial scan — yields refs for everything currently on disk (top-level
+   *  sessions plus their `<UUID>/subagents` child transcripts). */
   async *scan(): AsyncIterable<SessionRef> {
     const entries = await safeReaddir(this.projectsDir);
     for (const entry of entries) {
@@ -89,22 +109,81 @@ export class ProjectsWatcher extends EventEmitter {
       if (!stat?.isDirectory()) continue;
       const files = await safeReaddir(dir);
       for (const f of files) {
-        if (!SESSION_FILE_RE.test(f)) continue;
-        const ref = await this.refFromPath(join(dir, f));
-        if (ref) yield ref;
+        const full = join(dir, f);
+        if (SESSION_FILE_RE.test(f)) {
+          const ref = await this.refFromPath(full);
+          if (ref) yield ref;
+          continue;
+        }
+        // A `<UUID>` dir may hold a `subagents/` folder of child transcripts.
+        const subDir = join(full, "subagents");
+        if ((await fs.stat(subDir).catch(() => null))?.isDirectory()) {
+          this.ensureSubWatch(subDir);
+          for await (const childRef of this.scanSubagents(subDir)) yield childRef;
+        }
       }
     }
+  }
+
+  /** Recursively yield child refs under a `subagents` dir (direct layout and
+   *  the nested `workflows/wf_<id>/` layout). */
+  private async *scanSubagents(subDir: string): AsyncIterable<SessionRef> {
+    const stack = [subDir];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      for (const e of await safeReaddir(cur)) {
+        const full = join(cur, e);
+        if (AGENT_FILE_RE.test(e)) {
+          const ref = await this.refFromPath(full);
+          if (ref) yield ref;
+        } else if (!e.includes(".")) {
+          if ((await fs.stat(full).catch(() => null))?.isDirectory()) stack.push(full);
+        }
+      }
+    }
+  }
+
+  /** Start watching a subagents dir for live child add/change/unlink. Idempotent. */
+  private ensureSubWatch(dir: string): void {
+    if (this.subDirs.has(dir)) return;
+    this.subDirs.add(dir);
+    if (!this.subWatcher) {
+      this.subWatcher = chokidar.watch(dir, {
+        depth: 4, // subagents/ → workflows/ → wf_*/ → agent-*.jsonl
+        persistent: true,
+        ignoreInitial: true, // scan() already yielded existing files
+        awaitWriteFinish: false,
+        ignored: (p) => isIgnoredWatchPath(this.projectsDir, p),
+      });
+      this.subWatcher.on("add", (p) => this.handleAdd(p));
+      this.subWatcher.on("change", (p) => this.handleChange(p));
+      this.subWatcher.on("unlink", (p) => this.handleUnlink(p));
+    } else {
+      this.subWatcher.add(dir);
+    }
+  }
+
+  /** When a top-level session writes, pick up a freshly-created subagents dir. */
+  private async maybeWatchSubagents(parentFilePath: string): Promise<void> {
+    const uuid = sessionIdFromPath(parentFilePath);
+    if (!uuid) return;
+    const subDir = join(dirname(parentFilePath), uuid, "subagents");
+    if (this.subDirs.has(subDir)) return;
+    if (!(await fs.stat(subDir).catch(() => null))?.isDirectory()) return;
+    this.ensureSubWatch(subDir);
+    for await (const ref of this.scanSubagents(subDir)) this.emitEvent({ kind: "added", ref });
   }
 
   private async refFromPath(filePath: string): Promise<SessionRef | null> {
     const st = await fs.stat(filePath).catch(() => null);
     if (!st || !st.isFile()) return null;
-    const id = sessionIdFromPath(filePath);
+    const sub = parentInfoFromSubagentPath(this.projectsDir, filePath);
+    const id = sub ? sub.childId : sessionIdFromPath(filePath);
     if (!id) return null;
     const workspaceEncoded = workspaceEncodedFromPath(filePath, this.projectsDir);
     const workspace = decodePath(workspaceEncoded);
     const provisional = projectIdentityFromCwd(workspace); // 임시 — reader가 cwd로 정정
-    return {
+    const ref: SessionRef = {
       id,
       adapterId: "claude-code",
       workspace,
@@ -115,6 +194,8 @@ export class ProjectsWatcher extends EventEmitter {
       source: filePath,
       mtime: Math.floor(st.mtimeMs / 1000),
     };
+    if (sub) ref.parentId = sub.parentUuid;
+    return ref;
   }
 }
 

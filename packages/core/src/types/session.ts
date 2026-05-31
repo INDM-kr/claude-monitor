@@ -30,6 +30,9 @@ export interface SessionRef {
   source: string;
   /** mtime epoch seconds */
   mtime: number;
+  /** For sub-agent/workflow child transcripts: the parent session UUID
+   *  (from the `<UUID>/subagents/` path). Undefined for normal/root sessions. */
+  parentId?: string;
 }
 
 export interface PendingSubagent {
