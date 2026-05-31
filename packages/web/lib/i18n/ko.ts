@@ -19,6 +19,9 @@ export const ko = {
     todoNext: "다음",
     msg: "msg",
     context: "컨텍스트",
+    childAgents: "하위 에이전트",
+    childShow: "펼치기",
+    childHide: "접기",
   },
   runner: {
     conductor: "Conductor",

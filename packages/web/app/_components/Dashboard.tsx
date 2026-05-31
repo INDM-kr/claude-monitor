@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
-import { groupByProject, type ProjectGroupData } from "../../lib/group";
+import { groupByProject, childrenByParent, type ProjectGroupData } from "../../lib/group";
 import { parseStatuses } from "../../lib/filter";
 import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
@@ -90,6 +90,9 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   }, [sessions, dismissed, statusParam, now]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);
+  // Child (sub-agent) sessions render nested under their parent card, not as
+  // top-level cards. groupByProject already excludes them from the groups.
+  const childMap = useMemo(() => childrenByParent(visible), [visible]);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -119,6 +122,7 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
             projectKey={g.projectKey}
             projectLabel={g.projectLabel}
             sessions={g.sessions}
+            childrenByParent={childMap}
           />
         ))
       )}

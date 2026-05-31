@@ -13,9 +13,16 @@ import { RunnerBadge } from "./RunnerBadge";
 import { ContextBar } from "./ContextBar";
 import { KillButton } from "./KillButton";
 import { DismissButton } from "./DismissButton";
+import { ChildSessionList } from "./ChildSessionList";
 import { t } from "../../lib/i18n/t";
 
-export function SessionCard({ session }: { session: SessionSummary }) {
+export function SessionCard({
+  session,
+  childSessions,
+}: {
+  session: SessionSummary;
+  childSessions?: SessionSummary[];
+}) {
   // Derive status/age from the ticking client clock (not the frozen
   // session.status baked in at read time) so LIVE→idle→stop decays in place.
   const now = useSessionStore((s) => s.now);
@@ -87,6 +94,8 @@ export function SessionCard({ session }: { session: SessionSummary }) {
       </div>
 
       <WidgetSlot slot="card-footer" session={session} />
+
+      <ChildSessionList sessions={childSessions} />
     </article>
   );
 }

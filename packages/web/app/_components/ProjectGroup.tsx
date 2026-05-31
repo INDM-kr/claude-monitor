@@ -10,10 +10,12 @@ export function ProjectGroup({
   projectKey,
   projectLabel,
   sessions,
+  childrenByParent,
 }: {
   projectKey: string;
   projectLabel: string;
   sessions: SessionSummary[];
+  childrenByParent?: Map<string, SessionSummary[]>;
 }) {
   const [collapsed, toggle] = useCollapsed(projectKey);
   return (
@@ -34,7 +36,11 @@ export function ProjectGroup({
       {!collapsed && (
         <div className="space-y-2 pl-1">
           {sessions.map((s) => (
-            <SessionCard key={`${s.ref.adapterId}::${s.ref.id}`} session={s} />
+            <SessionCard
+              key={`${s.ref.adapterId}::${s.ref.id}`}
+              session={s}
+              childSessions={childrenByParent?.get(s.ref.id)}
+            />
           ))}
         </div>
       )}
