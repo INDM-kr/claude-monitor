@@ -26,6 +26,8 @@ export default async function Page({
   );
 
   // Seed the store with the flat list (incl. child sub-agent sessions); the
-  // Dashboard groups roots and nests children client-side.
-  return <Dashboard initial={summaries} />;
+  // Dashboard groups roots and nests children client-side. Pass the resolved
+  // filter so the live (SSE) view applies the SAME maxAge/glob the server used
+  // here — otherwise the live view drifts from this refresh snapshot.
+  return <Dashboard initial={summaries} filter={{ maxAgeHours: maxAge, all, filterGlob }} />;
 }

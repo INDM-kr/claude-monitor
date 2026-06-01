@@ -25,8 +25,19 @@ export interface FilterOpts {
   now: number; // epoch seconds
 }
 
-export function sessionMatches(s: SessionSummary, o: FilterOpts): boolean {
-  if (o.statuses.length > 0 && !o.statuses.includes(s.status)) return false;
+/**
+ * @param statusOverride client-derived status (deriveStatus(now, mtime)). The
+ * server omits it (s.status is fresh at read time); the client passes it so the
+ * live view filters by the SAME status the badge shows — and so the live filter
+ * (maxAge/glob/status) matches the server's refresh filter exactly.
+ */
+export function sessionMatches(
+  s: SessionSummary,
+  o: FilterOpts,
+  statusOverride?: string,
+): boolean {
+  const status = statusOverride ?? s.status;
+  if (o.statuses.length > 0 && !o.statuses.includes(status)) return false;
   if (!o.all && o.maxAgeHours != null && Number.isFinite(o.maxAgeHours)) {
     const cutoff = o.now - o.maxAgeHours * 3600;
     if (s.ref.mtime < cutoff) return false;

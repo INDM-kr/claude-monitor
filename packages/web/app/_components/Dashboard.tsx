@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
 import { groupByProject, childrenByParent } from "../../lib/group";
-import { parseStatuses } from "../../lib/filter";
+import { parseStatuses, sessionMatches } from "../../lib/filter";
 import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
 import { OrphanChildren } from "./OrphanChildren";
@@ -14,7 +14,13 @@ import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
 import { useDismissed, dismissKey } from "../../lib/dismissed";
 
-export function Dashboard({ initial }: { initial: SessionSummary[] }) {
+export function Dashboard({
+  initial,
+  filter,
+}: {
+  initial: SessionSummary[];
+  filter: { maxAgeHours: number | null; all: boolean; filterGlob: string | null };
+}) {
   const setInitial = useSessionStore((s) => s.setInitial);
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
@@ -81,13 +87,21 @@ export function Dashboard({ initial }: { initial: SessionSummary[] }) {
   const statusParam = searchParams.get("status");
   const visible = useMemo(() => {
     const statuses = parseStatuses(statusParam);
+    const opts = {
+      maxAgeHours: filter.maxAgeHours,
+      all: filter.all,
+      filterGlob: filter.filterGlob,
+      statuses,
+      now,
+    };
     return [...sessions.values()].filter((s) => {
       if (dismissed.has(dismissKey(s))) return false;
-      // Derive from the live clock — must match the badge in SessionCard, not
-      // the frozen summary.status, or "stop" sessions leak into the idle filter.
-      return statuses.length === 0 || statuses.includes(deriveStatus(now, s.ref.mtime));
+      // Same filter the server applied on refresh — but with the live clock and
+      // the derived status (deriveStatus), so the live view neither drifts from
+      // the refresh snapshot nor leaks "stop" sessions into the idle filter.
+      return sessionMatches(s, opts, deriveStatus(now, s.ref.mtime));
     });
-  }, [sessions, dismissed, statusParam, now]);
+  }, [sessions, dismissed, statusParam, now, filter.maxAgeHours, filter.all, filter.filterGlob]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);
   // Child (sub-agent) sessions render nested under their parent card, not as
