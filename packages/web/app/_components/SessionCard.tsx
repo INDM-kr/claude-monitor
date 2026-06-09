@@ -37,7 +37,7 @@ export function SessionCard({
   return (
     <div>
       {/* session row */}
-      <div className="group/row flex items-baseline px-2 leading-[1.15] hover:bg-bg-soft/40">
+      <div className="group/row flex items-baseline whitespace-nowrap px-2 leading-[1.15] hover:bg-bg-soft/40">
         <span className="whitespace-pre text-zinc-700">{isLast ? "└─ " : "├─ "}</span>
         <TreeGlyph status={status} />
         <Link
@@ -56,17 +56,17 @@ export function SessionCard({
             <DismissButton session={session} />
             <KillButton session={session} />
           </span>
-          <span className="shrink-0 tabular-nums text-zinc-500">
-            {ctx && <span className="inline-block w-[4ch] text-right">{ctx}</span>}
+          <span className="shrink-0 whitespace-nowrap tabular-nums text-zinc-500">
+            {ctx && <span className="inline-block w-[5ch] text-right">{ctx}</span>}
             {ctx && <span className="text-zinc-700"> · </span>}
-            <span className="inline-block w-[4ch] text-right">{ago(age)}</span>
+            <span className="inline-block w-[7ch] text-right">{ago(age)}</span>
           </span>
         </span>
       </div>
 
       {/* activity sub-line — de-glyphed (no status dot) so it's session metadata, not a child */}
       {session.lastTool && (
-        <div className="flex items-baseline px-2 leading-[1.15] text-zinc-500">
+        <div className="flex items-baseline whitespace-nowrap px-2 leading-[1.15] text-zinc-500">
           <span className="whitespace-pre">
             <span className={clsx(hasTrunk && (trunkLive ? "text-emerald-600" : "text-zinc-700"))}>
               {hasTrunk ? "│" : " "}

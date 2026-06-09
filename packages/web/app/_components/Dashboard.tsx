@@ -117,7 +117,7 @@ export function Dashboard({
   }, [visible, childMap]);
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
         <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
         <FilterBar />
@@ -138,7 +138,7 @@ export function Dashboard({
       {groups.length === 0 && orphans.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
-        <div className="font-mono text-[13px]">
+        <div className="font-mono text-[12px]">
           {groups.map((g) => (
             <ProjectGroup
               key={g.projectKey}

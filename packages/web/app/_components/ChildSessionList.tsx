@@ -40,7 +40,7 @@ export function ChildSessionList({
         return (
           <div
             key={`${c.ref.adapterId}::${c.ref.id}`}
-            className="flex items-baseline px-2 leading-[1.15] hover:bg-bg-soft/40"
+            className="flex items-baseline whitespace-nowrap px-2 leading-[1.15] hover:bg-bg-soft/40"
           >
             <span className="whitespace-pre">
               {trunk ? (
@@ -56,7 +56,7 @@ export function ChildSessionList({
               <RunnerBadge runner={c.runner} compact />
             </span>
             <span className={clsx("ml-2 shrink-0 text-[10px]", STATE_CLS[status])}>{status}</span>
-            <span className="ml-2 inline-block w-[4ch] shrink-0 text-right tabular-nums text-zinc-600">
+            <span className="ml-2 inline-block w-[7ch] shrink-0 whitespace-nowrap text-right tabular-nums text-zinc-600">
               {ago(Math.max(0, now - c.ref.mtime))}
             </span>
           </div>
