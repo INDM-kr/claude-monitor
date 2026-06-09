@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>workflows — boxed groups</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --box:#0e1116;
+    --line:#1f2630;        /* box / connector borders */
+    --line-soft:#161b22;
+    --dim:#5b6573;         /* metadata */
+    --dim2:#3f4753;        /* deepest dim (connectors, dots) */
+    --fg:#c2cad6;          /* primary text */
+    --green:#3fb950;       /* live / done */
+    --cyan:#39c5cf;        /* working (◐), links */
+    --amber:#d9a441;       /* idle */
+    --red:#f26d6d;         /* failed */
+    --violet:#a779e9;      /* conductor runner */
+    --gray:#6e7681;        /* stop / quiet */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);}
+  body{
+    font:13px/1.55 ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    color:var(--fg);
+    padding:24px 18px 60px;
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:.1px;
+  }
+  .wrap{max-width:880px;margin:0 auto;}
+
+  /* ---- narrator / log line ---- */
+  .narrator{
+    display:flex;align-items:center;gap:10px;
+    color:var(--dim);font-size:12px;
+    padding:6px 4px 14px;border-bottom:1px solid var(--line-soft);margin-bottom:18px;
+  }
+  .narrator .nlive{color:var(--green);}
+  .narrator .nsep{color:var(--dim2);}
+  .narrator .npath{color:var(--cyan);}
+
+  /* ============ PROJECT BOX (fieldset-style) ============ */
+  .project{
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:var(--box);
+    margin:0 0 20px;
+    position:relative;
+  }
+  /* title sits on the top border like a ┌─ title ─┐ legend */
+  .project > summary{
+    list-style:none;cursor:pointer;outline:none;
+    display:flex;align-items:center;gap:8px;
+    margin:-10px 0 0 12px;            /* lift onto the top border */
+    padding:0 8px;width:max-content;
+    background:var(--box);            /* mask the border behind the title */
+    font-size:12px;
+  }
+  .project > summary::-webkit-details-marker{display:none;}
+  .caret{color:var(--gray);width:10px;display:inline-block;}
+  .project[open] .caret::before{content:"▾";}
+  .project:not([open]) .caret::before{content:"▸";}
+  .pname{color:var(--fg);font-weight:600;}
+  .pcount{color:var(--dim);}
+  .pbadge{
+    margin-left:6px;color:var(--dim2);font-size:11px;
+    border:1px solid var(--line);border-radius:3px;padding:0 5px;
+  }
+  .pbody{padding:8px 14px 12px;}
+
+  /* ============ TREE ROWS ============ */
+  /* a row = [connector gutter] [glyph] [primary ...] [right status col] */
+  .row{
+    display:flex;align-items:baseline;gap:0;
+    white-space:nowrap;
+    padding:1px 0;
+  }
+  .row:hover{background:#11151b;}
+  /* connector cells: each is one box-drawing slot, left-anchored, fixed width */
+  .conn{
+    color:var(--dim2);
+    flex:0 0 auto;
+    white-space:pre;
+    user-select:none;
+  }
+  .glyph{flex:0 0 auto;width:1.6em;text-align:center;}
+  .g-live{color:var(--green);}
+  .g-work{color:var(--cyan);}
+  .g-idle{color:var(--amber);}
+  .g-done{color:var(--green);}
+  .g-fail{color:var(--red);}
+  .g-stop{color:var(--gray);}
+
+  .name{color:var(--fg);font-weight:600;}
+  .name-child{color:var(--fg);font-weight:500;}
+  .name-link{color:var(--cyan);}
+  .meta{color:var(--dim);}
+  .meta-soft{color:var(--dim2);}
+  .act{color:var(--amber);}
+  .act-lbl{color:var(--dim);}
+  .desc{color:var(--fg);opacity:.82;}
+
+  /* runner token — bracketed dim, not a pill */
+  .run{font-size:11px;}
+  .run-cond{color:var(--violet);}
+  .run-agent{color:var(--amber);opacity:.85;}
+
+  /* the right-aligned terminal status column */
+  .grow{flex:1 1 auto;min-width:14px;}
+  .rcol{
+    flex:0 0 auto;display:inline-flex;gap:14px;align-items:baseline;
+    color:var(--dim);font-size:12px;text-align:right;
+  }
+  .rcol .age{color:var(--gray);min-width:34px;text-align:right;display:inline-block;}
+
+  /* mini ctx bar */
+  .ctx{color:var(--dim);}
+  .ctx .bar{color:var(--dim2);letter-spacing:1px;}
+  .ctx .pct{color:var(--dim);}
+
+  /* sub-tree wrapper: indent + continuation gutter handled per-row via .conn cells */
+  .children{margin:0;}
+
+  /* spacing between the two sessions inside a project */
+  .session-block{padding-top:2px;}
+  .session-block + .session-block{margin-top:2px;}
+
+  .legend{
+    margin:26px auto 0;max-width:880px;color:var(--dim2);font-size:11px;
+    display:flex;flex-wrap:wrap;gap:14px;border-top:1px solid var(--line-soft);padding-top:12px;
+  }
+  .legend b{font-weight:400;}
+  .legend .green{color:var(--green);} .legend .cyan{color:var(--cyan);}
+  .legend .amber{color:var(--amber);} .legend .red{color:var(--red);}
+  .legend .gray{color:var(--gray);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- narrator / workflow log line -->
+  <div class="narrator">
+    <span class="nlive">●</span>
+    <span>watching</span>
+    <span class="npath">~/conductor/workspaces</span>
+    <span class="nsep">·</span>
+    <span>4 sessions</span>
+    <span class="nsep">·</span>
+    <span>9 agents</span>
+    <span class="nsep">·</span>
+    <span>refreshed 1s ago</span>
+  </div>
+
+  <!-- ================= PROJECT: indm-codegen ================= -->
+  <details class="project" open>
+    <summary>
+      <span class="caret"></span>
+      <span class="pname">indm-codegen</span>
+      <span class="pcount">(2 root sessions)</span>
+      <span class="pbadge">workspace</span>
+    </summary>
+    <div class="pbody">
+
+      <!-- SESSION 1: santiago-v1 (NOT last → carries │ continuation gutter for its children) -->
+      <div class="session-block">
+        <div class="row">
+          <span class="conn">├─ </span>
+          <span class="glyph g-live">●</span>
+          <span class="name-link">santiago-v1</span>
+          <span class="meta">&nbsp;&nbsp;opus-4-8</span>
+          <span class="meta-soft">&nbsp;·&nbsp;bypassPermissions</span>
+          <span class="grow"></span>
+          <span class="rcol">
+            <span class="run run-cond">[Conductor]</span>
+            <span class="ctx"><span class="bar">[██░░░░░░]</span> <span class="pct">17%</span></span>
+            <span class="age">3s</span>
+          </span>
+        </div>
+        <!-- session activity line, still inside the │ gutter -->
+        <div class="row">
+          <span class="conn">│&nbsp;&nbsp;&nbsp;</span>
+          <span class="glyph">&nbsp;</span>
+          <span class="act-lbl">activity:</span>
+          <span class="act">&nbsp;Bash</span>
+          <span class="desc">&nbsp;— pnpm --filter web build</span>
+        </div>
+
+        <!-- 9 workflow-agent children, indented under │ gutter -->
+        <div class="children">
+          <!-- 1 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-work">◐</span>
+            <span class="name-child">general-purpose</span>
+            <span class="desc">&nbsp;— Implement Task 19: consent screen</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">12s</span></span>
+          </div>
+          <!-- 2 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-done">✓</span>
+            <span class="name-child">Explore</span>
+            <span class="desc">&nbsp;— map data sources</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">2m</span></span>
+          </div>
+          <!-- 3 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-live">●</span>
+            <span class="name-child">code-reviewer</span>
+            <span class="desc">&nbsp;— review diff for SQL safety</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">5s</span></span>
+          </div>
+          <!-- 4 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-work">◐</span>
+            <span class="name-child">general-purpose</span>
+            <span class="desc">&nbsp;— wire SSE endpoint</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">20s</span></span>
+          </div>
+          <!-- 5 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-done">✓</span>
+            <span class="name-child">Explore</span>
+            <span class="desc">&nbsp;— find all call sites</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">4m</span></span>
+          </div>
+          <!-- 6 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-idle">○</span>
+            <span class="name-child">doc-writer</span>
+            <span class="desc">&nbsp;— update README</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">9m</span></span>
+          </div>
+          <!-- 7 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-done">✓</span>
+            <span class="name-child">general-purpose</span>
+            <span class="desc">&nbsp;— add tests</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">6m</span></span>
+          </div>
+          <!-- 8 -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;├─ </span>
+            <span class="glyph g-fail">✗</span>
+            <span class="name-child">general-purpose</span>
+            <span class="desc">&nbsp;— migrate config <span style="color:var(--red);opacity:.7">(failed)</span></span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">7m</span></span>
+          </div>
+          <!-- 9 (LAST child → └─) -->
+          <div class="row">
+            <span class="conn">│&nbsp;&nbsp;&nbsp;└─ </span>
+            <span class="glyph g-done">✓</span>
+            <span class="name-child">Explore</span>
+            <span class="desc">&nbsp;— audit deps</span>
+            <span class="grow"></span>
+            <span class="rcol"><span class="run run-agent">[Agent]</span><span class="age">8m</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SESSION 2: lisbon (LAST session in project → └─, no children) -->
+      <div class="session-block">
+        <div class="row">
+          <span class="conn">└─ </span>
+          <span class="glyph g-idle">○</span>
+          <span class="name-link">lisbon</span>
+          <span class="meta">&nbsp;&nbsp;sonnet-4-6</span>
+          <span class="grow"></span>
+          <span class="rcol">
+            <span class="run run-cond">[Conductor]</span>
+            <span class="ctx"><span class="bar">[████░░░░]</span> <span class="pct">41%</span></span>
+            <span class="age">8m</span>
+          </span>
+        </div>
+        <div class="row">
+          <span class="conn">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+          <span class="glyph">&nbsp;</span>
+          <span class="act-lbl">activity:</span>
+          <span class="act">&nbsp;Edit</span>
+          <span class="desc">&nbsp;— Dashboard.tsx</span>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <!-- ================= PROJECT: claude-monitor ================= -->
+  <details class="project" open>
+    <summary>
+      <span class="caret"></span>
+      <span class="pname">claude-monitor</span>
+      <span class="pcount">(1 root session)</span>
+      <span class="pbadge">workspace</span>
+    </summary>
+    <div class="pbody">
+
+      <!-- SESSION: muscat (only session → └─, no children) -->
+      <div class="session-block">
+        <div class="row">
+          <span class="conn">└─ </span>
+          <span class="glyph g-live">●</span>
+          <span class="name-link">muscat</span>
+          <span class="meta">&nbsp;&nbsp;opus-4-8</span>
+          <span class="grow"></span>
+          <span class="rcol">
+            <span class="run run-cond">[Conductor]</span>
+            <span class="ctx"><span class="bar">[█░░░░░░░]</span> <span class="pct">12%</span></span>
+            <span class="age">1s</span>
+          </span>
+        </div>
+        <div class="row">
+          <span class="conn">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+          <span class="glyph">&nbsp;</span>
+          <span class="act-lbl">activity:</span>
+          <span class="act">&nbsp;Grep</span>
+          <span class="desc">&nbsp;— sessionMatches</span>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+  <!-- legend -->
+  <div class="legend">
+    <b><span class="green">●</span> live</b>
+    <b><span class="cyan">◐</span> working</b>
+    <b><span class="amber">○</span> idle</b>
+    <b><span class="gray">·</span> stop</b>
+    <b><span class="green">✓</span> done</b>
+    <b><span class="red">✗</span> failed</b>
+    <span class="nsep">·</span>
+    <b>right col: runner · ctx% · age</b>
+  </div>
+
+</div>
+</body>
+</html>

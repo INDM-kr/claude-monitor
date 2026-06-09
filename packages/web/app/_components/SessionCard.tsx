@@ -3,99 +3,90 @@
 import Link from "next/link";
 import type { SessionSummary } from "@claude-monitor/core";
 import { ago, shortSid, truncate } from "@claude-monitor/core";
+import clsx from "clsx";
 import { useSessionStore } from "../../lib/store";
 import { deriveStatus } from "../../lib/derive-status";
-import { StatusBadge } from "./StatusBadge";
-import { TodoProgress } from "./TodoProgress";
-import { SubAgentList } from "./SubAgentList";
-import { WidgetSlot } from "./WidgetSlot";
+import { TreeGlyph } from "./TreeGlyph";
 import { RunnerBadge } from "./RunnerBadge";
-import { ContextBar } from "./ContextBar";
+import { ChildSessionList } from "./ChildSessionList";
 import { KillButton } from "./KillButton";
 import { DismissButton } from "./DismissButton";
-import { ChildSessionList } from "./ChildSessionList";
-import { t } from "../../lib/i18n/t";
 
+/**
+ * One session as terminal-tree rows: the session row (├─/└─ from the project),
+ * an optional de-glyphed activity sub-line (│ ↳, so it never reads as a child),
+ * then its sub-agent/workflow children. `isLast` = last session in the project
+ * group → its subtree gets a blank trunk instead of a continuing │.
+ */
 export function SessionCard({
   session,
   childSessions,
+  isLast,
 }: {
   session: SessionSummary;
   childSessions?: SessionSummary[];
+  isLast?: boolean;
 }) {
-  // Derive status/age from the ticking client clock (not the frozen
-  // session.status baked in at read time) so LIVE→idle→stop decays in place.
   const now = useSessionStore((s) => s.now);
   const age = Math.max(0, now - session.ref.mtime);
   const status = deriveStatus(now, session.ref.mtime);
+  const trunkLive = status === "live";
+  const hasTrunk = !isLast; // a sibling session follows → │ continues
+  const ctx = session.context ? `${Math.round(session.context.pct * 100)}%` : null;
+
   return (
-    <article className="relative rounded-md border border-border-subtle bg-bg-card px-4 py-3">
-      {/* 액션 버튼: 박스 우측 상단 고정 */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
-        <DismissButton session={session} />
-        <KillButton session={session} />
+    <div>
+      {/* session row */}
+      <div className="group/row flex items-baseline px-2 leading-[1.15] hover:bg-bg-soft/40">
+        <span className="whitespace-pre text-zinc-700">{isLast ? "└─ " : "├─ "}</span>
+        <TreeGlyph status={status} />
+        <Link
+          href={`/session/${session.ref.id}?adapter=${session.ref.adapterId}`}
+          className="ml-1.5 shrink-0 text-cyan-400 hover:underline"
+        >
+          {shortSid(session.ref.id)}
+        </Link>
+        {session.model && <span className="ml-2 shrink-0 text-zinc-500">{session.model}</span>}
+        <span className="ml-2 shrink-0">
+          <RunnerBadge runner={session.runner} compact />
+        </span>
+        {session.mode && <span className="ml-2 shrink-0 text-[11px] text-amber-300/70">{session.mode}</span>}
+        <span className="ml-auto flex items-baseline gap-2 pl-3">
+          <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100">
+            <DismissButton session={session} />
+            <KillButton session={session} />
+          </span>
+          <span className="shrink-0 tabular-nums text-zinc-500">
+            {ctx && <span className="inline-block w-[4ch] text-right">{ctx}</span>}
+            {ctx && <span className="text-zinc-700"> · </span>}
+            <span className="inline-block w-[4ch] text-right">{ago(age)}</span>
+          </span>
+        </span>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:gap-5">
-        {/* 좌: 정체성·상태·모델·컨텍스트 */}
-        <div className="min-w-0 space-y-2 sm:flex-1">
-          <header className="flex flex-wrap items-center gap-3 pr-14 text-sm">
-            <StatusBadge status={status} />
-            <Link
-              href={`/session/${session.ref.id}?adapter=${session.ref.adapterId}`}
-              className="text-cyan-400 hover:underline"
-            >
-              {shortSid(session.ref.id)}
-            </Link>
-            <time
-              className="text-zinc-500"
-              dateTime={new Date(session.ref.mtime * 1000).toISOString()}
-              title={new Date(session.ref.mtime * 1000).toLocaleString()}
-            >
-              {ago(age)}
-            </time>
-            <RunnerBadge runner={session.runner} />
-          </header>
-
-          {(session.model || session.mode) && (
-            <div className="flex items-center gap-3 pl-1 text-xs text-zinc-500">
-              {session.model && <span>{session.model}</span>}
-              {session.mode && <span className="text-zinc-600">· {session.mode}</span>}
-            </div>
-          )}
-
-          <ContextBar context={session.context} />
+      {/* activity sub-line — de-glyphed (no status dot) so it's session metadata, not a child */}
+      {session.lastTool && (
+        <div className="flex items-baseline px-2 leading-[1.15] text-zinc-500">
+          <span className="whitespace-pre">
+            <span className={clsx(hasTrunk && (trunkLive ? "text-emerald-600" : "text-zinc-700"))}>
+              {hasTrunk ? "│" : " "}
+            </span>
+            <span className="text-zinc-700">{"  ↳ "}</span>
+          </span>
+          <span className="min-w-0 truncate text-xs">
+            <span className="text-amber-400/80">{session.lastTool}</span>
+            {session.lastActivityDetail && (
+              <>
+                {" — "}
+                <span className="text-amber-200/70">{truncate(session.lastActivityDetail, 60)}</span>
+              </>
+            )}
+          </span>
         </div>
+      )}
 
-        {/* 우: 활동(도구·sub-agent·todo·메시지) */}
-        <div className="min-w-0 space-y-2 sm:flex-1 sm:pr-10">
-          {session.lastTool && (
-            <div className="pl-1 text-xs text-amber-400/90">
-              {t("card.activity")}: <span className="text-amber-300">{session.lastTool}</span>
-              {session.lastActivityDetail && (
-                <span className="text-amber-200/80"> — {truncate(session.lastActivityDetail, 60)}</span>
-              )}
-            </div>
-          )}
-
-          {session.pendingSubagents.length > 0 && <SubAgentList agents={session.pendingSubagents} />}
-
-          <WidgetSlot slot="card-body" session={session} />
-
-          {session.todo && <TodoProgress todo={session.todo} />}
-
-          {session.lastText && (
-            <div className="pl-1 text-xs text-zinc-500">
-              └ {t("card.msg")}:{" "}
-              <span className="text-zinc-400">{truncate(session.lastText, 120)}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <WidgetSlot slot="card-footer" session={session} />
-
-      <ChildSessionList sessions={childSessions} />
-    </article>
+      {/* children (sub-agents / workflow agents) */}
+      <ChildSessionList sessions={childSessions} trunk={hasTrunk ? { live: trunkLive } : null} />
+    </div>
   );
 }

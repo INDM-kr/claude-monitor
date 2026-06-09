@@ -138,7 +138,7 @@ export function Dashboard({
       {groups.length === 0 && orphans.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
-        <>
+        <div className="font-mono text-[13px]">
           {groups.map((g) => (
             <ProjectGroup
               key={g.projectKey}
@@ -149,7 +149,7 @@ export function Dashboard({
             />
           ))}
           <OrphanChildren groups={orphans} />
-        </>
+        </div>
       )}
 
       <footer className="text-xs text-zinc-600 pt-4 border-t border-border-subtle">
