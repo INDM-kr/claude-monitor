@@ -30,3 +30,6 @@ build/
 !.claude/hooks/check-gstack.sh
 
 .gstack/
+
+.scratch/
+mockups/
