@@ -29,3 +29,7 @@ build/
 .claude/hooks/*
 !.claude/hooks/check-gstack.sh
 
+.gstack/
+
+.scratch/
+mockups/

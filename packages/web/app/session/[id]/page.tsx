@@ -62,7 +62,10 @@ export default async function SessionDetail({
         <section className="space-y-1 text-sm">
           <h2 className="text-zinc-300">{t("detail.subagents")} ({s.pendingSubagents.length})</h2>
           {s.pendingSubagents.map((a) => (
-            <div key={a.id} className="text-zinc-500">└ {a.desc}</div>
+            <div key={a.id} className="text-zinc-500">
+              └ {a.desc}
+              {a.type && a.type !== a.desc ? ` (${a.type})` : ""}
+            </div>
           ))}
         </section>
       )}

@@ -132,4 +132,16 @@ describe("ClaudeCodeReader incremental tail", () => {
     expect(sum.runner).toBe("unknown");
     expect(sum.pid).toBeNull();
   });
+
+  it("runner를 transcript entrypoint에서 폴백한다 (sdk-ts + conductor cwd → conductor)", async () => {
+    const withEntrypoint = JSON.stringify({
+      type: "assistant",
+      entrypoint: "sdk-ts",
+      cwd: "/Users/kim/conductor/workspaces/proj-x/lisbon",
+      message: { content: [{ type: "text", text: "hi" }] },
+    });
+    await fs.writeFile(file, withEntrypoint + "\n");
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.runner).toBe("conductor");
+  });
 });

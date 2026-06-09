@@ -1,6 +1,6 @@
 export type SessionStatus = "live" | "idle" | "stop";
 
-export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "unknown";
+export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
 
 export interface ContextUsage {
   /** 추정 컨텍스트 점유 토큰 (input + cache_read + cache_creation) */
@@ -30,11 +30,16 @@ export interface SessionRef {
   source: string;
   /** mtime epoch seconds */
   mtime: number;
+  /** For sub-agent/workflow child transcripts: the parent session UUID
+   *  (from the `<UUID>/subagents/` path). Undefined for normal/root sessions. */
+  parentId?: string;
 }
 
 export interface PendingSubagent {
   id: string;
   desc: string;
+  /** subagent_type from the Task/Agent tool input, when present (e.g. "Explore"). */
+  type: string | null;
 }
 
 export interface TodoSnapshot {
@@ -48,6 +53,9 @@ export interface SessionSummary {
   ref: SessionRef;
   status: SessionStatus;
   lastTool: string | null;
+  /** Salient target of the last tool call (Bash description, edited file, grep
+   *  pattern…) — "what it's doing now", beyond the bare tool name. */
+  lastActivityDetail?: string | null;
   pendingSubagents: PendingSubagent[];
   todo: TodoSnapshot | null;
   /** Last assistant text, truncated to 200 chars to match CLI behavior */

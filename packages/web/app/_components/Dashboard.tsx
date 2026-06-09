@@ -4,20 +4,30 @@ import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
-import { groupByProject, type ProjectGroupData } from "../../lib/group";
-import { parseStatuses } from "../../lib/filter";
+import { groupByProject, childrenByParent } from "../../lib/group";
+import { parseStatuses, sessionMatches } from "../../lib/filter";
+import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
+import { OrphanChildren } from "./OrphanChildren";
 import { FilterBar } from "./FilterBar";
 import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
 import { useDismissed, dismissKey } from "../../lib/dismissed";
 
-export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
+export function Dashboard({
+  initial,
+  filter,
+}: {
+  initial: SessionSummary[];
+  filter: { maxAgeHours: number | null; all: boolean; filterGlob: string | null };
+}) {
   const setInitial = useSessionStore((s) => s.setInitial);
   const upsert = useSessionStore((s) => s.upsert);
   const remove = useSessionStore((s) => s.remove);
   const setConnected = useSessionStore((s) => s.setConnected);
+  const tick = useSessionStore((s) => s.tick);
   const sessions = useSessionStore((s) => s.sessions);
+  const now = useSessionStore((s) => s.now);
   const connected = useSessionStore((s) => s.connected);
   const dismissed = useDismissed((s) => s.dismissed);
   const hydrateDismissed = useDismissed((s) => s.hydrate);
@@ -25,9 +35,15 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
 
   useEffect(() => hydrateDismissed(), [hydrateDismissed]);
 
+  // Client clock: advances time-relative UI (status decay, "X ago") between SSE
+  // events. Without it, a session that stops writing stays "● LIVE / 2s ago".
   useEffect(() => {
-    const flat = initial.flatMap((g) => g.sessions);
-    setInitial(flat);
+    const id = setInterval(() => tick(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [tick]);
+
+  useEffect(() => {
+    setInitial(initial);
   }, [initial, setInitial]);
 
   useEffect(() => {
@@ -71,17 +87,37 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
   const statusParam = searchParams.get("status");
   const visible = useMemo(() => {
     const statuses = parseStatuses(statusParam);
-    return [...sessions.values()].filter(
-      (s) =>
-        !dismissed.has(dismissKey(s)) &&
-        (statuses.length === 0 || statuses.includes(s.status)),
-    );
-  }, [sessions, dismissed, statusParam]);
+    const opts = {
+      maxAgeHours: filter.maxAgeHours,
+      all: filter.all,
+      filterGlob: filter.filterGlob,
+      statuses,
+      now,
+    };
+    return [...sessions.values()].filter((s) => {
+      if (dismissed.has(dismissKey(s))) return false;
+      // Same filter the server applied on refresh — but with the live clock and
+      // the derived status (deriveStatus), so the live view neither drifts from
+      // the refresh snapshot nor leaks "stop" sessions into the idle filter.
+      return sessionMatches(s, opts, deriveStatus(now, s.ref.mtime));
+    });
+  }, [sessions, dismissed, statusParam, now, filter.maxAgeHours, filter.all, filter.filterGlob]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);
+  // Child (sub-agent) sessions render nested under their parent card, not as
+  // top-level cards. groupByProject already excludes them from the groups.
+  const childMap = useMemo(() => childrenByParent(visible), [visible]);
+  // Orphans: visible children whose parent isn't a visible root (filtered out
+  // by status/age). Surfaced under a synthetic parent header, never dropped.
+  const orphans = useMemo(() => {
+    const rootIds = new Set(visible.filter((s) => !s.ref.parentId).map((s) => s.ref.id));
+    return [...childMap.entries()]
+      .filter(([parentId]) => !rootIds.has(parentId))
+      .map(([parentId, children]) => ({ parentId, children }));
+  }, [visible, childMap]);
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
         <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
         <FilterBar />
@@ -99,17 +135,21 @@ export function Dashboard({ initial }: { initial: ProjectGroupData[] }) {
         </div>
       </header>
 
-      {groups.length === 0 ? (
+      {groups.length === 0 && orphans.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
-        groups.map((g) => (
-          <ProjectGroup
-            key={g.projectKey}
-            projectKey={g.projectKey}
-            projectLabel={g.projectLabel}
-            sessions={g.sessions}
-          />
-        ))
+        <div className="font-mono text-[12px]">
+          {groups.map((g) => (
+            <ProjectGroup
+              key={g.projectKey}
+              projectKey={g.projectKey}
+              projectLabel={g.projectLabel}
+              sessions={g.sessions}
+              childrenByParent={childMap}
+            />
+          ))}
+          <OrphanChildren groups={orphans} />
+        </div>
       )}
 
       <footer className="text-xs text-zinc-600 pt-4 border-t border-border-subtle">
