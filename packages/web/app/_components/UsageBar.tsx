@@ -40,7 +40,7 @@ function pctColor(pct: number): string {
   return pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "text-emerald-400";
 }
 
-/** Terminal ▓░ bar for a 0-100 percentage. */
+/** Terminal ▓░ bar for a 0-100 percentage (inline-block so it column-aligns). */
 function Bar({ pct }: { pct: number }) {
   const filled = Math.max(0, Math.min(CELLS, Math.round((pct / 100) * CELLS)));
   return (
@@ -51,32 +51,43 @@ function Bar({ pct }: { pct: number }) {
   );
 }
 
-function Reset({ resetSec, now }: { resetSec: number | null; now: number }) {
-  if (resetSec == null) return null;
-  return (
-    <>
-      {" · "}
-      {t("usage.reset")} {fmtClock(resetSec)}{" "}
-      <span className="text-zinc-600">({fmtUntil(resetSec - now)})</span>
-    </>
-  );
+function reset(resetSec: number | null, now: number): string {
+  if (resetSec == null) return "";
+  return `· ${t("usage.reset")} ${fmtClock(resetSec)} (${fmtUntil(resetSec - now)})`;
 }
 
-/** Estimate-mode gauge: tokens vs a denominator (config limit or recent peak). */
-function EstGauge({ tokens, denom, source }: { tokens: number; denom: number; source: string }) {
-  const pct = denom > 0 ? (tokens / denom) * 100 : 0;
+/** One aligned window row: label | value | bar | reset, fixed-width columns. */
+function Row({
+  label,
+  value,
+  valueClass,
+  valueW = "w-[5ch]",
+  pct,
+  tail,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+  valueW?: string;
+  pct: number | null;
+  tail?: string;
+}) {
   return (
-    <>
-      {" "}
-      <span className="text-zinc-600">/ {fmtTok(denom)}</span> <Bar pct={pct} />{" "}
-      <span className={pctColor(pct)}>{Math.round(pct)}%</span>
-      <span className="text-zinc-700"> ({source})</span>
-    </>
+    <div className="flex items-baseline px-2 leading-[1.3] whitespace-nowrap">
+      <span className="inline-block w-[8ch] shrink-0 text-zinc-500">{label}</span>
+      <span
+        className={clsx("inline-block shrink-0 text-right tabular-nums", valueW, valueClass)}
+      >
+        {value}
+      </span>
+      <span className="ml-2 shrink-0">{pct != null ? <Bar pct={pct} /> : null}</span>
+      {tail && <span className="ml-2 shrink-0 text-zinc-600">{tail}</span>}
+    </div>
   );
 }
 
 /** Account-wide token usage strip: authoritative % from the OAuth endpoint when
- *  available, else an estimate from local transcripts. */
+ *  available, else an estimate from local transcripts. Two aligned rows. */
 export function UsageBar() {
   const now = useSessionStore((s) => s.now);
   const [r, setR] = useState<Resp | null>(null);
@@ -89,7 +100,7 @@ export function UsageBar() {
         .then((d) => alive && d && setR(d))
         .catch(() => {});
     load();
-    const id = setInterval(load, 60_000); // endpoint is server-cached 5min; 60s UI poll is cheap
+    const id = setInterval(load, 60_000);
     return () => {
       alive = false;
       clearInterval(id);
@@ -98,44 +109,68 @@ export function UsageBar() {
 
   if (!r) return null;
 
-  if (r.source === "api" && r.api) {
-    const { fiveHour, sevenDay } = r.api;
-    return (
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-border-subtle px-2 py-1 font-mono text-[11px] text-zinc-500">
-        <span className="text-zinc-400">⚡ {t("usage.title")}</span>
-        <span>
-          {t("usage.block")}: <span className={pctColor(fiveHour.pct)}>{Math.round(fiveHour.pct)}%</span>{" "}
-          <Bar pct={fiveHour.pct} />
-          <Reset resetSec={fiveHour.resetSec} now={now} />
-        </span>
-        <span>
-          {t("usage.week")}: <span className={pctColor(sevenDay.pct)}>{Math.round(sevenDay.pct)}%</span>{" "}
-          <Bar pct={sevenDay.pct} />
-          <Reset resetSec={sevenDay.resetSec} now={now} />
-        </span>
-        <span className="text-zinc-600">· {t("usage.real")}</span>
-      </div>
-    );
-  }
+  const isApi = r.source === "api" && r.api;
+  const sourceLabel = isApi ? t("usage.real") : t("usage.estimate");
 
-  // estimate fallback
-  const { block, week, limits } = r.local;
-  const blockDenom = limits.block ?? (block.peakPrior > 0 ? block.peakPrior : 0);
-  const blockSource = limits.block ? t("usage.limit") : t("usage.peak");
-  const weekDenom = limits.week ?? 0;
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-border-subtle px-2 py-1 font-mono text-[11px] text-zinc-500">
-      <span className="text-zinc-400">⚡ {t("usage.title")}</span>
-      <span>
-        {t("usage.block")}: <span className="text-zinc-300">{fmtTok(block.tokens)}</span> tok
-        {blockDenom > 0 && <EstGauge tokens={block.tokens} denom={blockDenom} source={blockSource} />}
-        {block.active && <Reset resetSec={block.resetSec} now={now} />}
-      </span>
-      <span>
-        {t("usage.week")}: <span className="text-zinc-300">{fmtTok(week.tokens)}</span> tok
-        {weekDenom > 0 && <EstGauge tokens={week.tokens} denom={weekDenom} source={t("usage.limit")} />}
-      </span>
-      <span className="text-zinc-600">· {t("usage.estimate")}</span>
+    <div className="border-y border-border-subtle py-1 font-mono text-[11px]">
+      <div className="flex items-baseline gap-2 px-2 pb-0.5 text-zinc-400">
+        <span>⚡ {t("usage.title")}</span>
+        <span className="text-zinc-600">· {sourceLabel}</span>
+      </div>
+      {isApi ? (
+        <>
+          <Row
+            label={t("usage.block")}
+            value={`${Math.round(r.api!.fiveHour.pct)}%`}
+            valueClass={pctColor(r.api!.fiveHour.pct)}
+            pct={r.api!.fiveHour.pct}
+            tail={reset(r.api!.fiveHour.resetSec, now)}
+          />
+          <Row
+            label={t("usage.week")}
+            value={`${Math.round(r.api!.sevenDay.pct)}%`}
+            valueClass={pctColor(r.api!.sevenDay.pct)}
+            pct={r.api!.sevenDay.pct}
+            tail={reset(r.api!.sevenDay.resetSec, now)}
+          />
+        </>
+      ) : (
+        <EstimateRows local={r.local} now={now} />
+      )}
     </div>
+  );
+}
+
+function EstimateRows({ local, now }: { local: Local; now: number }) {
+  const blockDenom = local.limits.block ?? (local.block.peakPrior > 0 ? local.block.peakPrior : 0);
+  const blockPct = blockDenom > 0 ? (local.block.tokens / blockDenom) * 100 : null;
+  const weekDenom = local.limits.week ?? 0;
+  const weekPct = weekDenom > 0 ? (local.week.tokens / weekDenom) * 100 : null;
+  const blockSrc = local.limits.block ? t("usage.limit") : t("usage.peak");
+  return (
+    <>
+      <Row
+        label={t("usage.block")}
+        value={`${fmtTok(local.block.tokens)} tok`}
+        valueClass="text-zinc-300"
+        valueW="w-[10ch]"
+        pct={blockPct}
+        tail={[
+          blockPct != null ? `${Math.round(blockPct)}% (${blockSrc})` : "",
+          local.block.active ? reset(local.block.resetSec, now) : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      />
+      <Row
+        label={t("usage.week")}
+        value={`${fmtTok(local.week.tokens)} tok`}
+        valueClass="text-zinc-300"
+        valueW="w-[10ch]"
+        pct={weekPct}
+        tail={weekPct != null ? `${Math.round(weekPct)}% (${t("usage.limit")})` : ""}
+      />
+    </>
   );
 }
