@@ -17,7 +17,9 @@ export const ko = {
     block: "세션(5h)",
     week: "주간(7d)",
     reset: "리셋",
-    estimate: "추정 · cache-read 제외 · 주간 한도값은 API 전용",
+    peak: "최근 최대",
+    limit: "한도",
+    estimate: "추정 · cache-read 제외 · 주간 한도값은 API 전용 (CM_*_TOKEN_LIMIT로 한도 지정)",
   },
   card: {
     tool: "도구",

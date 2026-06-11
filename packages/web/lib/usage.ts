@@ -23,11 +23,26 @@ export function usageTokens(u: Record<string, unknown> | null | undefined): numb
   return n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
 }
 
+export interface UsageLimits {
+  block: number | null;
+  week: number | null;
+}
+
 export interface UsageWindows {
   /** Current 5-hour block (Claude's session window). */
-  block: { tokens: number; startSec: number | null; resetSec: number | null; active: boolean };
+  block: {
+    tokens: number;
+    startSec: number | null;
+    resetSec: number | null;
+    active: boolean;
+    /** Largest PRIOR block in the scan — the gauge denominator when no explicit
+     *  limit is configured ("vs your recent peak"). 0 if no prior block. */
+    peakPrior: number;
+  };
   /** Rolling last 7 days (no fixed reset anchor available locally). */
   week: { tokens: number; sinceSec: number };
+  /** Configured token limits (gauge denominator); null → fall back to peakPrior. */
+  limits: UsageLimits;
   totalEvents: number;
   now: number;
   /** Estimate disclaimer surfaced to the UI. */
@@ -35,22 +50,29 @@ export interface UsageWindows {
 }
 
 /** Pure: bucket events into the current 5h block + rolling 7d window. */
-export function computeUsageWindows(events: UsageEvent[], now: number): UsageWindows {
+export function computeUsageWindows(
+  events: UsageEvent[],
+  now: number,
+  limits: UsageLimits = { block: null, week: null },
+): UsageWindows {
   const sorted = [...events].sort((a, b) => a.ts - b.ts);
 
   // 5h blocks: a fixed 5h window from the block's first event; an event >=5h
   // after the current block's start opens a new block.
-  let blockStart: number | null = null;
-  let blockTokens = 0;
+  const blocks: { start: number; tokens: number }[] = [];
   for (const e of sorted) {
-    if (blockStart === null || e.ts - blockStart >= BLOCK_SEC) {
-      blockStart = e.ts;
-      blockTokens = 0;
+    const cur = blocks[blocks.length - 1];
+    if (!cur || e.ts - cur.start >= BLOCK_SEC) {
+      blocks.push({ start: e.ts, tokens: e.tokens });
+    } else {
+      cur.tokens += e.tokens;
     }
-    blockTokens += e.tokens;
   }
-  const resetSec = blockStart != null ? blockStart + BLOCK_SEC : null;
+  const current = blocks[blocks.length - 1] ?? null;
+  const resetSec = current ? current.start + BLOCK_SEC : null;
   const active = resetSec != null && now < resetSec;
+  const prior = blocks.slice(0, -1);
+  const peakPrior = prior.length > 0 ? Math.max(...prior.map((b) => b.tokens)) : 0;
 
   const weekSince = now - WEEK_SEC;
   let weekTokens = 0;
@@ -58,12 +80,14 @@ export function computeUsageWindows(events: UsageEvent[], now: number): UsageWin
 
   return {
     block: {
-      tokens: active ? blockTokens : 0,
-      startSec: active ? blockStart : null,
+      tokens: active && current ? current.tokens : 0,
+      startSec: active && current ? current.start : null,
       resetSec: active ? resetSec : null,
       active,
+      peakPrior,
     },
     week: { tokens: weekTokens, sinceSec: weekSince },
+    limits,
     totalEvents: events.length,
     now,
     estimated: true,
@@ -116,8 +140,12 @@ const TTL_MS = 20_000;
 export async function aggregateUsage(): Promise<UsageWindows> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.data;
   const now = Math.floor(Date.now() / 1000);
-  const events = await collectUsageEvents(loadConfig().projectsDir, now);
-  const data = computeUsageWindows(events, now);
+  const cfg = loadConfig();
+  const events = await collectUsageEvents(cfg.projectsDir, now);
+  const data = computeUsageWindows(events, now, {
+    block: cfg.blockTokenLimit,
+    week: cfg.weeklyTokenLimit,
+  });
   cache = { at: Date.now(), data };
   return data;
 }

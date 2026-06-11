@@ -55,6 +55,22 @@ describe("computeUsageWindows", () => {
     expect(w.week.tokens).toBe(460);
   });
 
+  it("peakPrior = largest block BEFORE the current one (gauge denominator)", () => {
+    const events: UsageEvent[] = [
+      { ts: now - 20 * H, tokens: 1000 }, // prior block
+      { ts: now - 10 * H, tokens: 3000 }, // prior block (the peak)
+      { ts: now - 1 * H, tokens: 200 }, // current block
+    ];
+    const w = computeUsageWindows(events, now);
+    expect(w.block.tokens).toBe(200);
+    expect(w.block.peakPrior).toBe(3000);
+  });
+
+  it("passes through configured limits", () => {
+    const w = computeUsageWindows([], now, { block: 5000, week: 99000 });
+    expect(w.limits).toEqual({ block: 5000, week: 99000 });
+  });
+
   it("empty events → zeros, inactive block", () => {
     const w = computeUsageWindows([], now);
     expect(w.block.active).toBe(false);
