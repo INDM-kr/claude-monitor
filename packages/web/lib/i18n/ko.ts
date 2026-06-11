@@ -19,6 +19,7 @@ export const ko = {
     reset: "리셋",
     peak: "최근 최대",
     limit: "한도",
+    real: "실제 (Claude 계정)",
     estimate: "추정 · cache-read 제외 · 주간 한도값은 API 전용 (CM_*_TOKEN_LIMIT로 한도 지정)",
   },
   card: {
