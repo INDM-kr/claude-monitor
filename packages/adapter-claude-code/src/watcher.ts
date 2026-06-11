@@ -194,7 +194,10 @@ export class ProjectsWatcher extends EventEmitter {
       source: filePath,
       mtime: Math.floor(st.mtimeMs / 1000),
     };
-    if (sub) ref.parentId = sub.parentUuid;
+    if (sub) {
+      ref.parentId = sub.parentUuid;
+      if (sub.wfId) ref.wfId = sub.wfId;
+    }
     return ref;
   }
 }

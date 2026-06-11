@@ -73,6 +73,8 @@ describe("ProjectsWatcher.scan — sub-agent child discovery", () => {
 
     const nested = refs.find((r) => r.id === `${UUID}/agent-a2`);
     expect(nested?.parentId).toBe(UUID);
+    expect(nested?.wfId).toBe("wf_a");
+    expect(direct?.wfId).toBeUndefined();
 
     // exactly one root, two children
     expect(refs.filter((r) => !r.parentId)).toHaveLength(1);

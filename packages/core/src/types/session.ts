@@ -45,6 +45,8 @@ export interface SessionRef {
   /** For sub-agent/workflow child transcripts: the parent session UUID
    *  (from the `<UUID>/subagents/` path). Undefined for normal/root sessions. */
   parentId?: string;
+  /** Workflow run id (`wf_*`) when the child is under a workflow run; else undefined. */
+  wfId?: string;
 }
 
 export interface PendingSubagent {
