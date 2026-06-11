@@ -40,11 +40,12 @@ function pctColor(pct: number): string {
   return pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "text-emerald-400";
 }
 
-/** Terminal ▓░ bar for a 0-100 percentage (inline-block so it column-aligns). */
+/** Terminal ▓░ bar for a 0-100 percentage. `-top-px` nudges the block glyphs
+ *  up 1px — they sit lower than digits, so this baseline-aligns them with the text. */
 function Bar({ pct }: { pct: number }) {
   const filled = Math.max(0, Math.min(CELLS, Math.round((pct / 100) * CELLS)));
   return (
-    <span className={clsx("tracking-tight", pctColor(pct))}>
+    <span className={clsx("relative -top-px tracking-tight", pctColor(pct))}>
       {"▓".repeat(filled)}
       <span className="text-zinc-700">{"░".repeat(CELLS - filled)}</span>
     </span>
