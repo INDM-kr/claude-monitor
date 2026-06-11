@@ -12,6 +12,13 @@ export const ko = {
     showAll: "전체",
     maxAge: "최근",
   },
+  usage: {
+    title: "토큰 사용량",
+    block: "세션(5h)",
+    week: "주간(7d)",
+    reset: "리셋",
+    estimate: "추정 · cache-read 제외 · 주간 한도값은 API 전용",
+  },
   card: {
     tool: "도구",
     activity: "현재 작업",

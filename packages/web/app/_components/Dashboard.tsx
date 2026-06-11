@@ -10,6 +10,7 @@ import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
 import { OrphanChildren } from "./OrphanChildren";
 import { FilterBar } from "./FilterBar";
+import { UsageBar } from "./UsageBar";
 import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
 import { useDismissed, dismissKey } from "../../lib/dismissed";
@@ -120,6 +121,7 @@ export function Dashboard({
     <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
         <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
+        <UsageBar />
         <FilterBar />
         <div className="flex items-center gap-3">
           {!connected && <span className="text-xs text-amber-400">{t("app.connectionLost")}</span>}
