@@ -34,6 +34,21 @@ export interface ParserState {
   mode: string | null;
   model: string | null;
   contextTokens: number | null;
+  // --- agent metrics + lifecycle (meaningful for sub-agent child transcripts) ---
+  /** Σ(input + cache_creation + output) across the whole transcript. */
+  totalTokens: number;
+  /** Number of tool_use calls. */
+  toolCount: number;
+  firstTsMs: number | null;
+  lastTsMs: number | null;
+  /** stop_reason of the last assistant message ("end_turn" = finished cleanly). */
+  lastStopReason: string | null;
+  /** Saw an API-error / error line. */
+  sawError: boolean;
+  /** Saw an explicit user-interruption marker. */
+  sawCancelled: boolean;
+  /** Workflow phase, when the agent carries one (tool_use input.phase). */
+  phase: string | null;
 }
 
 export function initial(): ParserState {
@@ -52,6 +67,14 @@ export function initial(): ParserState {
     mode: null,
     model: null,
     contextTokens: null,
+    totalTokens: 0,
+    toolCount: 0,
+    firstTsMs: null,
+    lastTsMs: null,
+    lastStopReason: null,
+    sawError: false,
+    sawCancelled: false,
+    phase: null,
   };
 }
 
@@ -62,10 +85,14 @@ export interface ParsedLine {
   version?: string;
   entrypoint?: string;
   permissionMode?: string;
+  timestamp?: string;
+  isApiErrorMessage?: boolean;
+  error?: unknown;
   message?: {
     model?: string;
     usage?: Record<string, unknown>;
     content?: Array<Record<string, unknown>>;
+    stop_reason?: string;
   };
 }
 
@@ -85,10 +112,26 @@ export function fold(state: ParserState, line: string): ParserState {
   if (typeof obj.entrypoint === "string") state.entrypoint = obj.entrypoint;
   if (typeof obj.permissionMode === "string") state.mode = obj.permissionMode;
 
+  if (typeof obj.timestamp === "string") {
+    const ms = Date.parse(obj.timestamp);
+    if (Number.isFinite(ms)) {
+      if (state.firstTsMs == null) state.firstTsMs = ms;
+      state.lastTsMs = ms;
+    }
+  }
+  if (obj.isApiErrorMessage === true || obj.error != null) state.sawError = true;
+  if (line.includes("interrupted by user") || line.includes("Request interrupted")) {
+    state.sawCancelled = true;
+  }
+
   const msg = obj.message;
   if (msg) {
     if (typeof msg.model === "string" && msg.model !== "<synthetic>") state.model = msg.model;
-    if (msg.usage) state.contextTokens = usageContextTokens(msg.usage);
+    if (msg.usage) {
+      state.contextTokens = usageContextTokens(msg.usage);
+      state.totalTokens += metricTokens(msg.usage);
+    }
+    if (typeof msg.stop_reason === "string") state.lastStopReason = msg.stop_reason;
   }
 
   if (obj?.type === "assistant") {
@@ -96,9 +139,12 @@ export function fold(state: ParserState, line: string): ParserState {
       if (c.type === "tool_use") {
         const name = String(c.name ?? "");
         const id = String(c.id ?? "");
+        state.toolCount++;
+        const inputAny = (c.input ?? {}) as Record<string, unknown>;
+        if (typeof inputAny.phase === "string" && inputAny.phase) state.phase = inputAny.phase;
         if (name) {
           state.lastToolName = name;
-          state.lastActivityDetail = salientDetail(name, (c.input ?? {}) as Record<string, unknown>);
+          state.lastActivityDetail = salientDetail(name, inputAny);
         }
         if (SUBAGENT_TOOLS.has(name) && id) {
           const input = (c.input ?? {}) as Record<string, unknown>;
@@ -190,4 +236,10 @@ export function pendingSubagents(state: ParserState): PendingSubagent[] {
 export function usageContextTokens(u: Record<string, unknown>): number {
   const n = (k: string): number => (typeof u[k] === "number" ? (u[k] as number) : 0);
   return n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens");
+}
+
+/** Tokens processed this turn (excludes cache_read re-reads), summed for metrics. */
+export function metricTokens(u: Record<string, unknown>): number {
+  const n = (k: string): number => (typeof u[k] === "number" ? (u[k] as number) : 0);
+  return n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens");
 }

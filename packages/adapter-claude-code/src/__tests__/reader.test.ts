@@ -144,4 +144,36 @@ describe("ClaudeCodeReader incremental tail", () => {
     const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
     expect(sum.runner).toBe("conductor");
   });
+
+  it("child agent: agentStatus=done + metrics from an end_turn transcript", async () => {
+    const childRef: SessionRef = { ...mkRef(file), parentId: "PARENT-UUID" };
+    const l1 = JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-06-11T00:00:00.000Z",
+      message: {
+        stop_reason: "tool_use",
+        usage: { input_tokens: 1, cache_creation_input_tokens: 50, output_tokens: 9 },
+        content: [{ type: "tool_use", id: "x", name: "Bash", input: { command: "ls" } }],
+      },
+    });
+    const l2 = JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-06-11T00:00:20.000Z",
+      message: {
+        stop_reason: "end_turn",
+        usage: { input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 5 },
+        content: [{ type: "text", text: "ok" }],
+      },
+    });
+    await fs.writeFile(file, l1 + "\n" + l2 + "\n");
+    const sum = await new ClaudeCodeReader(childRef).readIncremental();
+    expect(sum.agentStatus).toBe("done");
+    expect(sum.metrics).toEqual({ tokens: 65, tools: 1, durationSec: 20 });
+  });
+
+  it("non-child session: agentStatus is null", async () => {
+    await fs.writeFile(file, LINE_C + "\n");
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.agentStatus).toBeNull();
+  });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fold, initial, pendingSubagents, salientDetail, summarizeTodos, usageContextTokens } from "../parser.js";
+import { fold, initial, metricTokens, pendingSubagents, salientDetail, summarizeTodos, usageContextTokens } from "../parser.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -166,6 +166,52 @@ describe("parser fold — lastActivityDetail (Feature D)", () => {
     expect(salientDetail("WeirdTool", { x: 1 })).toBeNull();
     expect(salientDetail("Bash", {})).toBeNull();
     expect(salientDetail("Bash", { command: "x".repeat(100) })?.length).toBe(60);
+  });
+
+  it("accumulates agent metrics: totalTokens, toolCount, phase, stop_reason, ts", () => {
+    let s = initial();
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T00:00:00.000Z",
+        message: {
+          stop_reason: "tool_use",
+          usage: { input_tokens: 10, cache_creation_input_tokens: 100, output_tokens: 20 },
+          content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "ls", phase: "Review" } }],
+        },
+      }),
+    );
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T00:01:30.000Z",
+        message: {
+          stop_reason: "end_turn",
+          usage: { input_tokens: 5, cache_creation_input_tokens: 0, output_tokens: 15 },
+          content: [{ type: "text", text: "done" }],
+        },
+      }),
+    );
+    expect(s.totalTokens).toBe(150); // (10+100+20) + (5+0+15)
+    expect(s.toolCount).toBe(1);
+    expect(s.phase).toBe("Review");
+    expect(s.lastStopReason).toBe("end_turn");
+    expect(s.firstTsMs).toBe(Date.parse("2026-06-11T00:00:00.000Z"));
+    expect(s.lastTsMs).toBe(Date.parse("2026-06-11T00:01:30.000Z"));
+    expect(s.sawError).toBe(false);
+  });
+
+  it("sawError on an api-error line; sawCancelled on interruption; metricTokens excludes cache_read", () => {
+    let s = initial();
+    s = fold(s, JSON.stringify({ type: "assistant", isApiErrorMessage: true, message: { content: [] } }));
+    expect(s.sawError).toBe(true);
+    const c = fold(initial(), JSON.stringify({ type: "user", message: { content: [{ type: "text", text: "[Request interrupted by user]" }] } }));
+    expect(c.sawCancelled).toBe(true);
+    expect(
+      metricTokens({ input_tokens: 10, cache_creation_input_tokens: 100, cache_read_input_tokens: 9999, output_tokens: 20 }),
+    ).toBe(130);
   });
 
   it("fold sets lastActivityDetail on a tool_use; initial is null", () => {

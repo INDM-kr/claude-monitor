@@ -1,5 +1,5 @@
 import { open, stat } from "node:fs/promises";
-import type { SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
+import type { AgentStatus, SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
 import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
 import { fold, initial, pendingSubagents, summarizeTodos, type ParserState } from "./parser.js";
 
@@ -9,6 +9,21 @@ export interface ReaderOptions {
 
 const LF = 0x0a;
 const CHUNK = 64 * 1024;
+
+/** Lifecycle of a sub-agent run from its transcript signals. */
+function agentStatusOf(
+  s: ParserState,
+  mtimeSec: number,
+  now: number,
+  thresholds: StatusThresholds,
+): AgentStatus {
+  if (s.sawCancelled) return "cancelled"; // explicit user interruption
+  if (s.sawError) return "error";
+  if (s.lastStopReason === "end_turn") return "done"; // clean finish
+  // No marker: a stopped run finished (e.g. structured-output ends on a tool_use,
+  // not end_turn); a still-recent run is running.
+  return statusFromMtime(mtimeSec, now, thresholds) === "stop" ? "done" : "running";
+}
 
 export class ClaudeCodeReader implements SessionReader {
   private state: ParserState = initial();
@@ -62,6 +77,14 @@ export class ClaudeCodeReader implements SessionReader {
     const context =
       this.state.contextTokens != null ? computeContext(this.state.contextTokens, limit) : null;
 
+    // Agent lifecycle + metrics are only meaningful for sub-agent child runs.
+    const isChild = this.ref.parentId != null;
+    const s = this.state;
+    const durationSec =
+      s.firstTsMs != null && s.lastTsMs != null
+        ? Math.max(0, Math.round((s.lastTsMs - s.firstTsMs) / 1000))
+        : 0;
+
     const summary: SessionSummary = {
       ref: baseRef,
       status: statusFromMtime(mtimeSec, now, this.thresholds),
@@ -76,6 +99,9 @@ export class ClaudeCodeReader implements SessionReader {
       version: this.state.version,
       context,
       pid: null,
+      phase: s.phase,
+      agentStatus: isChild ? agentStatusOf(s, mtimeSec, now, this.thresholds) : null,
+      metrics: isChild ? { tokens: s.totalTokens, tools: s.toolCount, durationSec } : null,
       updatedAt: now,
     };
     this.cached = summary;

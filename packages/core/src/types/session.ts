@@ -2,6 +2,18 @@ export type SessionStatus = "live" | "idle" | "stop";
 
 export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
 
+/** Lifecycle of a sub-agent / workflow child run (not used for top-level sessions). */
+export type AgentStatus = "done" | "cancelled" | "error" | "running";
+
+export interface AgentMetrics {
+  /** Σ tokens processed (input + cache_creation + output). */
+  tokens: number;
+  /** Number of tool calls. */
+  tools: number;
+  /** Wall-clock duration of the run, seconds. */
+  durationSec: number;
+}
+
 export interface ContextUsage {
   /** 추정 컨텍스트 점유 토큰 (input + cache_read + cache_creation) */
   tokens: number;
@@ -72,6 +84,13 @@ export interface SessionSummary {
   context: ContextUsage | null;
   /** 실행 프로세스 PID (존재 시 kill 가능) */
   pid: number | null;
+  /** Workflow phase, for child agents that carry one (else null). */
+  phase?: string | null;
+  /** Lifecycle of a child sub-agent run (✔ done / ✗ cancelled·error / ◐ running);
+   *  null for top-level sessions. */
+  agentStatus?: AgentStatus | null;
+  /** Per-run metrics for child agents (tokens · tools · duration). */
+  metrics?: AgentMetrics | null;
   /** epoch seconds when this summary was computed */
   updatedAt: number;
 }
