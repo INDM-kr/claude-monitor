@@ -9,8 +9,10 @@ const pexec = promisify(exec);
 const ENDPOINT = "https://api.anthropic.com/api/oauth/usage";
 const KEYCHAIN_SERVICE = "Claude Code-credentials";
 const OAUTH_BETA = "oauth-2025-04-20";
-// The endpoint rate-limits aggressively (HTTP 429); poll no faster than ~5 min.
-const CACHE_TTL_MS = 5 * 60_000;
+// The endpoint rate-limits aggressively (HTTP 429); 180s is the documented
+// safe floor with the claude-code User-Agent. Kept tight so the % stays fresh
+// near the limit (a longer cache made it read stale, e.g. 95% after a hit).
+const CACHE_TTL_MS = 180_000;
 
 /** Authoritative usage % + reset from Anthropic (same source Claude Code shows). */
 export interface OAuthUsage {
