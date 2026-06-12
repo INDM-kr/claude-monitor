@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fold, initial, metricTokens, pendingSubagents, salientDetail, summarizeTodos, usageContextTokens } from "../parser.js";
+import { fold, initial, metricTokens, pendingSubagents, salientDetail, summarizeTasks, summarizeTodos, usageContextTokens } from "../parser.js";
+
+function taskLine(name: string, input: Record<string, unknown>): string {
+  return JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "x", name, input }] } });
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +76,21 @@ describe("parser fold — pending-subagent.jsonl", () => {
     );
     expect(pendingSubagents(state)[0]?.desc.length).toBe(40);
     expect(pendingSubagents(state)[0]?.type).toBeNull();
+  });
+});
+
+describe("parser fold — TaskCreate/TaskUpdate (Feature H)", () => {
+  it("reconstructs a task snapshot from creation order + status updates", () => {
+    let s = initial();
+    s = fold(s, taskLine("TaskCreate", { subject: "build" }));
+    s = fold(s, taskLine("TaskCreate", { subject: "test" }));
+    s = fold(s, taskLine("TaskUpdate", { taskId: "1", status: "completed" }));
+    s = fold(s, taskLine("TaskUpdate", { taskId: "2", status: "in_progress" }));
+    expect(summarizeTasks(s)).toEqual({ total: 2, done: 1, current: "test", next: null });
+  });
+
+  it("summarizeTasks is null with no tasks", () => {
+    expect(summarizeTasks(initial())).toBeNull();
   });
 });
 

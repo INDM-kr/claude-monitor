@@ -85,6 +85,29 @@ export function SessionCard({
         </div>
       )}
 
+      {/* task list (TaskCreate/TaskUpdate or TodoWrite) — compact summary */}
+      {session.todo && (
+        <div className="flex items-baseline whitespace-nowrap px-2 leading-[1.15] text-zinc-500">
+          <span className="whitespace-pre">
+            <span className={clsx(hasTrunk && (trunkLive ? "text-emerald-600" : "text-zinc-700"))}>
+              {hasTrunk ? "│" : " "}
+            </span>
+            <span className="text-zinc-700">{"  ↳ "}</span>
+          </span>
+          <span className="min-w-0 truncate text-xs">
+            📋 <span className="text-zinc-400">{session.todo.done}/{session.todo.total}</span>
+            {(session.todo.current ?? session.todo.next) && (
+              <>
+                {" · "}
+                <span className={session.todo.current ? "text-cyan-400/80" : "text-zinc-500"}>
+                  {truncate(session.todo.current ?? session.todo.next ?? "", 50)}
+                </span>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* children (sub-agents / workflow agents) */}
       <ChildSessionList sessions={childSessions} trunk={hasTrunk ? { live: trunkLive } : null} />
     </div>

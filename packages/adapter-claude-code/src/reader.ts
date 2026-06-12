@@ -1,7 +1,7 @@
 import { open, stat } from "node:fs/promises";
 import type { AgentStatus, SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
 import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
-import { fold, initial, pendingSubagents, summarizeTodos, type ParserState } from "./parser.js";
+import { fold, initial, pendingSubagents, summarizeTasks, summarizeTodos, type ParserState } from "./parser.js";
 
 export interface ReaderOptions {
   thresholds?: StatusThresholds;
@@ -91,7 +91,7 @@ export class ClaudeCodeReader implements SessionReader {
       lastTool: this.state.lastToolName,
       lastActivityDetail: this.state.lastActivityDetail,
       pendingSubagents: pendingSubagents(this.state),
-      todo: summarizeTodos(this.state.lastTodos),
+      todo: summarizeTodos(this.state.lastTodos) ?? summarizeTasks(this.state),
       lastText: this.state.lastText,
       runner: runnerFromEntrypoint(this.state.entrypoint, baseRef.workspace),
       model: this.state.model,

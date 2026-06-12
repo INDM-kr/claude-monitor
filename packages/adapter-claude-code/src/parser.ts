@@ -3,6 +3,8 @@ import type { PendingSubagent, TodoSnapshot } from "@claude-monitor/core";
 
 const SUBAGENT_TOOLS = new Set(["Task", "Agent"]);
 const TODO_TOOL = "TodoWrite";
+const TASK_CREATE = "TaskCreate";
+const TASK_UPDATE = "TaskUpdate";
 const LAST_TEXT_MAX = 200;
 const SUBAGENT_DESC_MAX = 40;
 const ACTIVITY_DETAIL_MAX = 60;
@@ -22,6 +24,9 @@ export interface ParserState {
   resolvedToolIds: Set<string>;
   /** latest TodoWrite snapshot */
   lastTodos: TodoItem[] | null;
+  /** TaskCreate/TaskUpdate task list (id → subject/status), creation order. */
+  tasks: Map<string, { subject: string; status: string }>;
+  taskSeq: number;
   /** Last non-empty assistant text (already truncated) */
   lastText: string | null;
   /** byte offset of the next unread byte in the source file */
@@ -58,6 +63,8 @@ export function initial(): ParserState {
     toolCallsById: new Map(),
     resolvedToolIds: new Set(),
     lastTodos: null,
+    tasks: new Map(),
+    taskSeq: 0,
     lastText: null,
     byteOffset: 0,
     cwd: null,
@@ -159,6 +166,16 @@ export function fold(state: ParserState, line: string): ParserState {
             state.lastTodos = input.todos;
           }
         }
+        if (name === TASK_CREATE) {
+          const subject = typeof inputAny.subject === "string" ? inputAny.subject : "";
+          state.taskSeq++;
+          state.tasks.set(String(state.taskSeq), { subject, status: "pending" });
+        }
+        if (name === TASK_UPDATE) {
+          const tid = inputAny.taskId != null ? String(inputAny.taskId) : "";
+          const tk = state.tasks.get(tid);
+          if (tk && typeof inputAny.status === "string") tk.status = inputAny.status;
+        }
       } else if (c.type === "text") {
         const text = String(c.text ?? "").trim();
         if (text) {
@@ -223,6 +240,21 @@ export function summarizeTodos(todos: TodoItem[] | null): TodoSnapshot | null {
     else if (!next && t.status === "pending") next = t.content ?? "";
   }
   return { total: todos.length, done, current, next };
+}
+
+/** Summarize the TaskCreate/TaskUpdate task list into the TodoSnapshot shape
+ *  (so it renders through the same UI as TodoWrite todos). */
+export function summarizeTasks(state: ParserState): TodoSnapshot | null {
+  if (state.tasks.size === 0) return null;
+  let done = 0;
+  let current: string | null = null;
+  let next: string | null = null;
+  for (const t of state.tasks.values()) {
+    if (t.status === "completed") done++;
+    else if (!current && t.status === "in_progress") current = t.subject;
+    else if (!next && t.status === "pending") next = t.subject;
+  }
+  return { total: state.tasks.size, done, current, next };
 }
 
 export function pendingSubagents(state: ParserState): PendingSubagent[] {
