@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucket, statusFromMtime } from "../util/status.js";
+import { bucket, statusFromMtime, deriveSessionStatus } from "../util/status.js";
 
 describe("status bucket", () => {
   it("live when age < 60s", () => {
@@ -27,5 +27,28 @@ describe("status bucket", () => {
   it("statusFromMtime clamps negative age", () => {
     const now = 1_000_000;
     expect(statusFromMtime(now + 100, now)).toBe("live");
+  });
+});
+
+describe("deriveSessionStatus — waiting (content signal over mtime)", () => {
+  it("ended turn + recent + no pending → waiting", () => {
+    expect(deriveSessionStatus(5, true, false)).toBe("waiting");
+    expect(deriveSessionStatus(120, true, false)).toBe("waiting");
+  });
+
+  it("mid-turn + recent → live (not waiting)", () => {
+    expect(deriveSessionStatus(5, false, false)).toBe("live");
+  });
+
+  it("ended but pending subagents → still working (mtime bucket)", () => {
+    expect(deriveSessionStatus(5, true, true)).toBe("live");
+  });
+
+  it("beyond recentSec → stop regardless of ended", () => {
+    expect(deriveSessionStatus(700, true, false)).toBe("stop");
+  });
+
+  it("mid-turn gone quiet (idle window) → idle", () => {
+    expect(deriveSessionStatus(120, false, false)).toBe("idle");
   });
 });

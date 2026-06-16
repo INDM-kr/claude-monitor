@@ -6,6 +6,7 @@ function mk(over: Partial<SessionSummary["ref"]> & { mtime: number }): SessionSu
   return {
     ref: { id: "i", adapterId: "claude-code", workspace: "/Users/x/proj/a", workspaceShort: "proj/a", projectKey: "k", projectLabel: "proj", owner: "x", source: "s", ...over },
     status: "live", lastTool: null, pendingSubagents: [], todo: null, lastText: null,
+    firstPrompt: null, userTurns: [], turnStartSec: null, turnTokens: null, endedTurn: false,
     runner: "unknown", model: null, mode: null, version: null, context: null, pid: null, updatedAt: 0,
   } as SessionSummary;
 }

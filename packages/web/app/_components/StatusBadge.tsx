@@ -3,7 +3,8 @@ import type { SessionStatus } from "@claude-monitor/core";
 
 const META: Record<SessionStatus, { symbol: string; label: string; color: string; dotClass?: string }> = {
   live: { symbol: "●", label: "LIVE", color: "text-emerald-400", dotClass: "live-dot" },
-  idle: { symbol: "○", label: "idle", color: "text-amber-400" },
+  waiting: { symbol: "◐", label: "waiting", color: "text-status-waiting", dotClass: "live-dot" },
+  idle: { symbol: "○", label: "idle", color: "text-zinc-500" },
   stop: { symbol: "·", label: "stop", color: "text-zinc-500" },
 };
 

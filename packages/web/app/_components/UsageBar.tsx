@@ -20,8 +20,6 @@ interface Resp {
   local: Local;
 }
 
-const CELLS = 10;
-
 function fmtTok(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
@@ -36,59 +34,32 @@ function fmtUntil(sec: number): string {
 function fmtClock(sec: number): string {
   return new Date(sec * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-function pctColor(pct: number): string {
-  return pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "text-emerald-400";
+function tone(pct: number | null): { text: string; bar: string } {
+  if (pct == null) return { text: "text-zinc-400", bar: "bg-zinc-500" };
+  if (pct >= 90) return { text: "text-status-error", bar: "bg-status-error" };
+  if (pct >= 70) return { text: "text-status-waiting", bar: "bg-status-waiting" };
+  return { text: "text-status-live", bar: "bg-status-live" };
 }
 
-/** Terminal ▓░ bar for a 0-100 percentage. `-top-px` nudges the block glyphs
- *  up 1px — they sit lower than digits, so this baseline-aligns them with the text. */
-function Bar({ pct }: { pct: number }) {
-  const filled = Math.max(0, Math.min(CELLS, Math.round((pct / 100) * CELLS)));
+/** One window gauge: label · slim bar · value. Reset time lives in the tooltip. */
+function Gauge({ label, pct, value, title }: { label: string; pct: number | null; value: string; title: string }) {
+  const c = tone(pct);
   return (
-    <span className={clsx("relative -top-px tracking-tight", pctColor(pct))}>
-      {"▓".repeat(filled)}
-      <span className="text-zinc-700">{"░".repeat(CELLS - filled)}</span>
+    <span className="inline-flex items-center gap-2" title={title}>
+      <span className="text-zinc-500">{label}</span>
+      <span className="h-[5px] w-[52px] overflow-hidden rounded-full border border-border bg-track">
+        <span
+          className={clsx("block h-full rounded-full transition-[width] duration-500", c.bar)}
+          style={{ width: `${pct == null ? 0 : Math.max(pct, 4)}%` }}
+        />
+      </span>
+      <span className={clsx("min-w-[3.4ch] text-right tabular-nums", c.text)}>{value}</span>
     </span>
   );
 }
 
-function reset(resetSec: number | null, now: number): string {
-  if (resetSec == null) return "";
-  return `· ${t("usage.reset")} ${fmtClock(resetSec)} (${fmtUntil(resetSec - now)})`;
-}
-
-/** One aligned window row: label | value | bar | reset, fixed-width columns. */
-function Row({
-  label,
-  value,
-  valueClass,
-  valueW = "w-[5ch]",
-  pct,
-  tail,
-}: {
-  label: string;
-  value: string;
-  valueClass?: string;
-  valueW?: string;
-  pct: number | null;
-  tail?: string;
-}) {
-  return (
-    <div className="flex items-baseline px-2 leading-[1.3] whitespace-nowrap">
-      <span className="inline-block w-[8ch] shrink-0 text-zinc-500">{label}</span>
-      <span
-        className={clsx("inline-block shrink-0 text-right tabular-nums", valueW, valueClass)}
-      >
-        {value}
-      </span>
-      <span className="ml-2 shrink-0">{pct != null ? <Bar pct={pct} /> : null}</span>
-      {tail && <span className="ml-2 shrink-0 text-zinc-600">{tail}</span>}
-    </div>
-  );
-}
-
-/** Account-wide token usage strip: authoritative % from the OAuth endpoint when
- *  available, else an estimate from local transcripts. Two aligned rows. */
+/** Account-wide token quota as a compact header gauge: authoritative % from the
+ *  OAuth endpoint when available, else a local-transcript estimate. */
 export function UsageBar() {
   const now = useSessionStore((s) => s.now);
   const [r, setR] = useState<Resp | null>(null);
@@ -109,69 +80,45 @@ export function UsageBar() {
   }, []);
 
   if (!r) return null;
-
   const isApi = r.source === "api" && r.api;
-  const sourceLabel = isApi ? t("usage.real") : t("usage.estimate");
+  const resetTip = (sec: number | null) =>
+    sec == null ? "" : ` · ${t("usage.reset")} ${fmtClock(sec)} (${fmtUntil(sec - now)})`;
+
+  let blockPct: number | null;
+  let weekPct: number | null;
+  let blockVal: string;
+  let weekVal: string;
+  let blockTip: string;
+  let weekTip: string;
+
+  if (isApi) {
+    blockPct = Math.round(r.api!.fiveHour.pct);
+    weekPct = Math.round(r.api!.sevenDay.pct);
+    blockVal = `${blockPct}%`;
+    weekVal = `${weekPct}%`;
+    blockTip = `${t("usage.block")} ${blockVal}${resetTip(r.api!.fiveHour.resetSec)}`;
+    weekTip = `${t("usage.week")} ${weekVal}${resetTip(r.api!.sevenDay.resetSec)}`;
+  } else {
+    const L = r.local;
+    const bDenom = L.limits.block ?? (L.block.peakPrior > 0 ? L.block.peakPrior : 0);
+    const wDenom = L.limits.week ?? 0;
+    blockPct = bDenom > 0 ? Math.round((L.block.tokens / bDenom) * 100) : null;
+    weekPct = wDenom > 0 ? Math.round((L.week.tokens / wDenom) * 100) : null;
+    blockVal = blockPct != null ? `${blockPct}%` : fmtTok(L.block.tokens);
+    weekVal = weekPct != null ? `${weekPct}%` : fmtTok(L.week.tokens);
+    blockTip = `${t("usage.block")} ${blockVal} (${t("usage.estimate")})${L.block.active ? resetTip(L.block.resetSec) : ""}`;
+    weekTip = `${t("usage.week")} ${weekVal}`;
+  }
 
   return (
-    <div className="border-y border-border-subtle py-1 font-mono text-[11px]">
-      <div className="flex items-baseline gap-2 px-2 pb-0.5 text-zinc-400">
-        <span>⚡ {t("usage.title")}</span>
-        <span className="text-zinc-600">· {sourceLabel}</span>
-      </div>
-      {isApi ? (
-        <>
-          <Row
-            label={t("usage.block")}
-            value={`${Math.round(r.api!.fiveHour.pct)}%`}
-            valueClass={pctColor(r.api!.fiveHour.pct)}
-            pct={r.api!.fiveHour.pct}
-            tail={reset(r.api!.fiveHour.resetSec, now)}
-          />
-          <Row
-            label={t("usage.week")}
-            value={`${Math.round(r.api!.sevenDay.pct)}%`}
-            valueClass={pctColor(r.api!.sevenDay.pct)}
-            pct={r.api!.sevenDay.pct}
-            tail={reset(r.api!.sevenDay.resetSec, now)}
-          />
-        </>
-      ) : (
-        <EstimateRows local={r.local} now={now} />
-      )}
+    <div
+      className="inline-flex items-center gap-3 rounded-full border border-border bg-bg-raised px-3 py-1 font-mono text-[11px]"
+      aria-label={t("usage.title")}
+    >
+      <span className="text-status-waiting" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡</span>
+      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} />
+      <span className="h-3 w-px bg-border" />
+      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} />
     </div>
-  );
-}
-
-function EstimateRows({ local, now }: { local: Local; now: number }) {
-  const blockDenom = local.limits.block ?? (local.block.peakPrior > 0 ? local.block.peakPrior : 0);
-  const blockPct = blockDenom > 0 ? (local.block.tokens / blockDenom) * 100 : null;
-  const weekDenom = local.limits.week ?? 0;
-  const weekPct = weekDenom > 0 ? (local.week.tokens / weekDenom) * 100 : null;
-  const blockSrc = local.limits.block ? t("usage.limit") : t("usage.peak");
-  return (
-    <>
-      <Row
-        label={t("usage.block")}
-        value={`${fmtTok(local.block.tokens)} tok`}
-        valueClass="text-zinc-300"
-        valueW="w-[10ch]"
-        pct={blockPct}
-        tail={[
-          blockPct != null ? `${Math.round(blockPct)}% (${blockSrc})` : "",
-          local.block.active ? reset(local.block.resetSec, now) : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      />
-      <Row
-        label={t("usage.week")}
-        value={`${fmtTok(local.week.tokens)} tok`}
-        valueClass="text-zinc-300"
-        valueW="w-[10ch]"
-        pct={weekPct}
-        tail={weekPct != null ? `${Math.round(weekPct)}% (${t("usage.limit")})` : ""}
-      />
-    </>
   );
 }

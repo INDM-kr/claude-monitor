@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import type { AgentStatus, SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
-import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
+import { defaultThresholds, statusFromMtime, deriveSessionStatus, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
 import { fold, initial, pendingSubagents, summarizeTasks, summarizeTodos, type ParserState } from "./parser.js";
 
 export interface ReaderOptions {
@@ -85,14 +85,29 @@ export class ClaudeCodeReader implements SessionReader {
         ? Math.max(0, Math.round((s.lastTsMs - s.firstTsMs) / 1000))
         : 0;
 
+    const pending = pendingSubagents(this.state);
+    // A finished turn = last record is an assistant message that ended cleanly.
+    const endedTurn = s.lastRecordType === "assistant" && s.lastStopReason === "end_turn";
+    const ageSec = Math.max(0, now - mtimeSec);
+    // Children keep the plain mtime status (lifecycle is in agentStatus); top-level
+    // sessions get the content-aware status (waiting vs live/idle/stop).
+    const status = isChild
+      ? statusFromMtime(mtimeSec, now, this.thresholds)
+      : deriveSessionStatus(ageSec, endedTurn, pending.length > 0, this.thresholds);
+
     const summary: SessionSummary = {
       ref: baseRef,
-      status: statusFromMtime(mtimeSec, now, this.thresholds),
+      status,
       lastTool: this.state.lastToolName,
       lastActivityDetail: this.state.lastActivityDetail,
-      pendingSubagents: pendingSubagents(this.state),
+      pendingSubagents: pending,
       todo: summarizeTodos(this.state.lastTodos) ?? summarizeTasks(this.state),
       lastText: this.state.lastText,
+      firstPrompt: s.userTurns[0] ?? null,
+      userTurns: s.userTurns,
+      turnStartSec: s.lastUserTurnTsMs != null ? Math.floor(s.lastUserTurnTsMs / 1000) : null,
+      turnTokens: s.userTurns.length > 0 ? s.turnTokens : null,
+      endedTurn,
       runner: runnerFromEntrypoint(this.state.entrypoint, baseRef.workspace),
       model: this.state.model,
       mode: this.state.mode,

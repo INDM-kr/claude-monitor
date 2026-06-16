@@ -1,4 +1,4 @@
-export type SessionStatus = "live" | "idle" | "stop";
+export type SessionStatus = "live" | "idle" | "waiting" | "stop";
 
 export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
 
@@ -74,6 +74,19 @@ export interface SessionSummary {
   todo: TodoSnapshot | null;
   /** Last assistant text, truncated to 200 chars to match CLI behavior */
   lastText: string | null;
+  /** The session's originating request — first real human turn (system/command/
+   *  meta/tool-result records skipped). Null when none extracted yet. */
+  firstPrompt: string | null;
+  /** All human turns in order (each truncated), for the expanded request history. */
+  userTurns: string[];
+  /** epoch seconds when the current turn started (last human prompt); null if none.
+   *  UI computes live elapsed = now − turnStartSec. */
+  turnStartSec: number | null;
+  /** tokens processed since the last human turn (current-turn burn); null if none. */
+  turnTokens: number | null;
+  /** The last record was an assistant message that finished cleanly (end_turn).
+   *  Drives the "waiting (for next prompt)" status. */
+  endedTurn: boolean;
   /** 세션 실행 러너 (프로세스 프로브서 보강; 기본 unknown) */
   runner: RunnerKind;
   /** 사용 모델 (<synthetic> 제외) */

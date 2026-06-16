@@ -8,6 +8,8 @@ const TASK_UPDATE = "TaskUpdate";
 const LAST_TEXT_MAX = 200;
 const SUBAGENT_DESC_MAX = 40;
 const ACTIVITY_DETAIL_MAX = 60;
+const HUMAN_TURN_MAX = 200;
+const USER_TURNS_CAP = 100;
 
 interface TodoItem {
   status: string;
@@ -29,6 +31,14 @@ export interface ParserState {
   taskSeq: number;
   /** Last non-empty assistant text (already truncated) */
   lastText: string | null;
+  /** Real human turns in order (system/command/meta/tool-result skipped, truncated). */
+  userTurns: string[];
+  /** epoch ms of the most recent human turn (current turn start); null if none. */
+  lastUserTurnTsMs: number | null;
+  /** tokens processed since the last human turn (reset on each human turn). */
+  turnTokens: number;
+  /** type of the most recent record ("assistant"|"user"); drives endedTurn. */
+  lastRecordType: "assistant" | "user" | null;
   /** byte offset of the next unread byte in the source file */
   byteOffset: number;
   // --- metadata enrichment ---
@@ -66,6 +76,10 @@ export function initial(): ParserState {
     tasks: new Map(),
     taskSeq: 0,
     lastText: null,
+    userTurns: [],
+    lastUserTurnTsMs: null,
+    turnTokens: 0,
+    lastRecordType: null,
     byteOffset: 0,
     cwd: null,
     gitBranch: null,
@@ -94,11 +108,14 @@ export interface ParsedLine {
   permissionMode?: string;
   timestamp?: string;
   isApiErrorMessage?: boolean;
+  /** Conductor/harness-injected non-human record (skill preamble, etc.). */
+  isMeta?: boolean;
   error?: unknown;
   message?: {
     model?: string;
     usage?: Record<string, unknown>;
-    content?: Array<Record<string, unknown>>;
+    /** Human prompts are a STRING; tool_results/assistant blocks are an array. */
+    content?: string | Array<Record<string, unknown>>;
     stop_reason?: string;
   };
 }
@@ -136,12 +153,15 @@ export function fold(state: ParserState, line: string): ParserState {
     if (typeof msg.model === "string" && msg.model !== "<synthetic>") state.model = msg.model;
     if (msg.usage) {
       state.contextTokens = usageContextTokens(msg.usage);
-      state.totalTokens += metricTokens(msg.usage);
+      const mt = metricTokens(msg.usage);
+      state.totalTokens += mt;
+      state.turnTokens += mt; // reset to 0 on each new human turn (below)
     }
     if (typeof msg.stop_reason === "string") state.lastStopReason = msg.stop_reason;
   }
 
   if (obj?.type === "assistant") {
+    state.lastRecordType = "assistant";
     for (const c of content) {
       if (c.type === "tool_use") {
         const name = String(c.name ?? "");
@@ -184,6 +204,17 @@ export function fold(state: ParserState, line: string): ParserState {
       }
     }
   } else if (obj?.type === "user") {
+    state.lastRecordType = "user";
+    // A real human turn = STRING content, not meta, not a wrapper (<system_instruction>,
+    // <command-name>, …). tool_result records are arrays → skipped here.
+    const raw = obj.message?.content;
+    if (isHumanTurn(obj, raw)) {
+      state.userTurns.push(raw.trim().slice(0, HUMAN_TURN_MAX));
+      // Preserve the original task ([0]); drop oldest-after-first when over cap.
+      if (state.userTurns.length > USER_TURNS_CAP) state.userTurns.splice(1, 1);
+      state.turnTokens = 0; // a new turn begins
+      if (state.lastTsMs != null) state.lastUserTurnTsMs = state.lastTsMs;
+    }
     for (const c of content) {
       if (c.type === "tool_result") {
         const id = c.tool_use_id;
@@ -193,6 +224,14 @@ export function fold(state: ParserState, line: string): ParserState {
   }
 
   return state;
+}
+
+/** Real human turn: not meta, STRING content, non-empty, not a wrapper tag. */
+function isHumanTurn(obj: ParsedLine, raw: unknown): raw is string {
+  if (obj.isMeta === true) return false;
+  if (typeof raw !== "string") return false;
+  const t = raw.trim();
+  return t.length > 0 && !t.startsWith("<");
 }
 
 /**

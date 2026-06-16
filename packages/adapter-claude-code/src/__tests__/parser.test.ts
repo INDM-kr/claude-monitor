@@ -23,6 +23,60 @@ function parseFile(name: string) {
   return state;
 }
 
+// Real-shape line builders (human prompt = STRING content; tool_result = array).
+const uStr = (content: string, extra: Record<string, unknown> = {}): string =>
+  JSON.stringify({ type: "user", message: { role: "user", content }, ...extra });
+const uTool = (id: string): string =>
+  JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id }] } });
+const aTurn = (
+  text: string,
+  opts: { stop_reason?: string; usage?: Record<string, number>; timestamp?: string } = {},
+): string =>
+  JSON.stringify({
+    type: "assistant",
+    timestamp: opts.timestamp,
+    message: { role: "assistant", content: [{ type: "text", text }], stop_reason: opts.stop_reason, usage: opts.usage },
+  });
+
+describe("parser fold — user turns + waiting signal", () => {
+  it("captures real human turns in order, skipping system/command/meta/tool_result", () => {
+    let s = initial();
+    [
+      uStr("<system_instruction>\nYou are working inside Conductor…"),
+      uStr("<command-name>/design-html</command-name>"),
+      uStr("ignored skill preamble", { isMeta: true }),
+      uStr("첫 진짜 요청"),
+      uTool("tu_1"),
+      uStr("두번째 요청"),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.userTurns).toEqual(["첫 진짜 요청", "두번째 요청"]);
+  });
+
+  it("turnTokens reset on each human turn, accumulate over assistant msgs after", () => {
+    let s = initial();
+    [
+      uStr("첫 요청", { timestamp: "2026-06-16T00:00:00.000Z" }),
+      aTurn("작업중", { usage: { output_tokens: 100 } }),
+      aTurn("계속", { usage: { output_tokens: 50 }, stop_reason: "end_turn" }),
+      uStr("둘째 요청", { timestamp: "2026-06-16T01:00:00.000Z" }),
+      aTurn("응답", { usage: { output_tokens: 30 } }),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.turnTokens).toBe(30); // only since the last human turn
+    expect(s.lastUserTurnTsMs).toBe(Date.parse("2026-06-16T01:00:00.000Z"));
+  });
+
+  it("endedTurn signal: assistant end_turn last → ended; tool_result last → mid-tool", () => {
+    let ended = initial();
+    [uStr("요청"), aTurn("끝", { stop_reason: "end_turn" })].forEach((l) => (ended = fold(ended, l)));
+    expect(ended.lastRecordType).toBe("assistant");
+    expect(ended.lastStopReason).toBe("end_turn");
+
+    let mid = initial();
+    [uStr("요청"), aTurn("툴", { stop_reason: "tool_use" }), uTool("tu_x")].forEach((l) => (mid = fold(mid, l)));
+    expect(mid.lastRecordType).toBe("user"); // tool running → not a finished turn
+  });
+});
+
 describe("parser fold — idle-session.jsonl", () => {
   it("captures last tool and last text", () => {
     const s = parseFile("idle-session.jsonl");
