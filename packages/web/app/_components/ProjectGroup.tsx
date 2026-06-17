@@ -31,7 +31,7 @@ export function ProjectGroup({
         </span>
       </button>
       {!collapsed && (
-        <div className="mt-1 grid gap-2.5">
+        <div className="mt-1 flex flex-col gap-2.5">
           {sessions.map((s) => (
             <SessionCard
               key={`${s.ref.adapterId}::${s.ref.id}`}

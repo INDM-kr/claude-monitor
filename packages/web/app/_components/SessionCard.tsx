@@ -59,7 +59,7 @@ export function SessionCard({
   return (
     <article
       className={clsx(
-        "rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
+        "min-w-0 overflow-hidden rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
         tone.border,
         status === "stop" && "opacity-80",
       )}
