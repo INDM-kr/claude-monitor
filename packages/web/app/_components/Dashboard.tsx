@@ -49,8 +49,10 @@ export function Dashboard({
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
+    // floor (not round) so the project bar pins flush-or-slightly-overlapping the
+    // header bottom — rounding up leaves a sub-pixel gap where content peeks through.
     const apply = () =>
-      document.documentElement.style.setProperty("--cm-header-h", `${Math.round(el.getBoundingClientRect().height)}px`);
+      document.documentElement.style.setProperty("--cm-header-h", `${Math.floor(el.getBoundingClientRect().height)}px`);
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
