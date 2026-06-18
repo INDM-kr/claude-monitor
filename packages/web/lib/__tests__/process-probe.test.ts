@@ -38,7 +38,6 @@ describe("process-probe parsing", () => {
     const entries = parsePsOutput(text);
     expect(entries).toHaveLength(2);
     expect(entries[0]).toEqual({ sessionId: "5a62fd30-6190-43e8-bf6a-bbbd8c8461f5", pid: 2881, runner: "conductor", contextLimit: 1_000_000 });
-    expect(entries[1].pid).toBe(6615);
-    expect(entries[1].contextLimit).toBeNull();
+    expect(entries[1]).toEqual({ sessionId: "2f794145-3d65-414c-871d-469420887642", pid: 6615, runner: "claude-code", contextLimit: null });
   });
 });
