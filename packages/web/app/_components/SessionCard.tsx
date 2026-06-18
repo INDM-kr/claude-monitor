@@ -59,14 +59,18 @@ export function SessionCard({
   return (
     <article
       className={clsx(
-        "min-w-0 overflow-hidden rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
+        "min-w-0 rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
+        !open && "overflow-hidden", // truncate the collapsed title; open lets the sticky head escape
         tone.border,
         status === "stop" && "opacity-80",
       )}
     >
       {/* head — click to expand */}
       <div
-        className="group/row -mx-1.5 flex cursor-pointer items-start gap-2.5 rounded-md px-1.5 py-0.5 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
+        className={clsx(
+          "group/row -mx-3 flex cursor-pointer items-start gap-2.5 px-3 py-1 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent",
+          open && "sticky top-[calc(var(--cm-header-h,102px)+29px)] z-20 border-b border-border bg-bg-soft",
+        )}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {

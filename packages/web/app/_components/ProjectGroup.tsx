@@ -22,7 +22,7 @@ export function ProjectGroup({
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-2 px-1 py-1 text-left text-zinc-400 hover:text-zinc-200"
+        className="sticky top-[var(--cm-header-h,102px)] z-30 -mx-4 box-border flex w-full items-center gap-2 border-b border-border-subtle bg-[rgb(13_17_23_/_92%)] px-4 py-1.5 text-left text-zinc-300 backdrop-blur-[4px] hover:text-zinc-100"
       >
         <span className={clsx("text-[11px] text-zinc-600 transition-transform", collapsed && "-rotate-90")}>▾</span>
         <span className="font-mono text-[12.5px] text-zinc-100">📁 {projectLabel}</span>
