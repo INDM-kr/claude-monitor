@@ -54,10 +54,13 @@ export function SessionCard({
   const status = deriveStatus(now, session);
   const tone = TONE[status];
   const live = status === "live";
-  const label = session.firstPrompt ?? (session.lastText ? truncate(session.lastText, 90) : t("card.request"));
+  const userTurns = session.userTurns ?? [];
+  // Title = the most recent user request; the full history below is newest-first.
+  const lastTurn = userTurns[userTurns.length - 1];
+  const label = lastTurn ?? session.firstPrompt ?? (session.lastText ? truncate(session.lastText, 90) : t("card.request"));
   const ctxPct = session.context ? Math.round(session.context.pct * 100) : null;
   const ctxColor = ctxPct == null ? "" : ctxPct >= 90 ? "bg-status-error" : ctxPct >= 70 ? "bg-status-waiting" : "bg-status-live";
-  const turns = session.userTurns ?? [];
+  const turns = [...userTurns].reverse(); // newest first
 
   return (
     <article
@@ -187,7 +190,8 @@ export function SessionCard({
               <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{t("card.request")}</h4>
               <ol className="mb-3 space-y-1">
                 {turns.map((turn, i) => {
-                  const latest = i === turns.length - 1 && turns.length > 1;
+                  const latest = i === 0 && turns.length > 1; // newest sits first after reverse
+                  const chronoNum = turns.length - i; // keep the chronological number (original request = 1)
                   return (
                     <li key={i} className="flex gap-2.5 text-[13px] leading-relaxed">
                       <span
@@ -196,7 +200,7 @@ export function SessionCard({
                           latest ? "border-status-live text-status-live" : "border-border text-zinc-600",
                         )}
                       >
-                        {i + 1}
+                        {chronoNum}
                       </span>
                       <span className={latest ? "text-zinc-100" : "text-zinc-400"}>{turn}</span>
                     </li>
