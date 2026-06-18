@@ -22,7 +22,7 @@ export function ProjectGroup({
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-2 px-1 py-1 text-left text-zinc-400 hover:text-zinc-200"
+        className="sticky top-[var(--cm-header-h,102px)] z-30 -mx-4 box-border flex w-[calc(100%+2rem)] items-center gap-2 bg-[rgb(13_17_23_/_92%)] px-4 py-1.5 text-left text-zinc-300 backdrop-blur-[4px] hover:text-zinc-100 relative after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border-subtle after:content-['']"
       >
         <span className={clsx("text-[11px] text-zinc-600 transition-transform", collapsed && "-rotate-90")}>▾</span>
         <span className="font-mono text-[12.5px] text-zinc-100">📁 {projectLabel}</span>
@@ -31,7 +31,7 @@ export function ProjectGroup({
         </span>
       </button>
       {!collapsed && (
-        <div className="mt-1 flex flex-col gap-2.5">
+        <div className="-mt-px flex flex-col gap-2.5">
           {sessions.map((s) => (
             <SessionCard
               key={`${s.ref.adapterId}::${s.ref.id}`}

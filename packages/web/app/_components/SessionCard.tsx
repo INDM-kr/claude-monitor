@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import type { SessionStatus, SessionSummary } from "@claude-monitor/core";
@@ -9,6 +8,7 @@ import { useSessionStore } from "../../lib/store";
 import { deriveStatus } from "../../lib/derive-status";
 import { RunnerBadge } from "./RunnerBadge";
 import { ChildSessionList } from "./ChildSessionList";
+import { useCollapsed } from "./useCollapsed";
 import { KillButton } from "./KillButton";
 import { DismissButton } from "./DismissButton";
 import { t } from "../../lib/i18n/t";
@@ -46,7 +46,10 @@ export function SessionCard({
   childSessions?: SessionSummary[];
 }) {
   const now = useSessionStore((s) => s.now);
-  const [open, setOpen] = useState(false);
+  // Persist expand state per session id so a reload/restart keeps cards the user
+  // opened open. Default collapsed (true) — untouched cards stay closed.
+  const [collapsed, toggleOpen] = useCollapsed(`card:${session.ref.id}`, true);
+  const open = !collapsed;
   const age = Math.max(0, now - session.ref.mtime);
   const status = deriveStatus(now, session);
   const tone = TONE[status];
@@ -59,19 +62,23 @@ export function SessionCard({
   return (
     <article
       className={clsx(
-        "min-w-0 overflow-hidden rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
+        "min-w-0 rounded-lg border border-border bg-bg-soft border-l-[3px] px-3 py-2.5 transition-colors",
+        !open && "overflow-hidden", // truncate the collapsed title; open lets the sticky head escape
         tone.border,
         status === "stop" && "opacity-80",
       )}
     >
       {/* head — click to expand */}
       <div
-        className="group/row -mx-1.5 flex cursor-pointer items-start gap-2.5 rounded-md px-1.5 py-0.5 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
-        onClick={() => setOpen((o) => !o)}
+        className={clsx(
+          "group/row -mx-3 flex cursor-pointer items-start gap-2.5 px-3 py-1 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent",
+          open && "sticky top-[calc(var(--cm-header-h,102px)+29px)] z-20 border-b border-border bg-bg-soft",
+        )}
+        onClick={toggleOpen}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setOpen((o) => !o);
+            toggleOpen();
           }
         }}
         role="button"

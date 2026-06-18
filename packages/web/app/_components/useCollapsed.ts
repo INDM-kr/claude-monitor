@@ -1,15 +1,18 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
-export function useCollapsed(key: string): [boolean, () => void] {
+export function useCollapsed(key: string, defaultCollapsed = false): [boolean, () => void] {
   const storageKey = `cm:collapsed:${key}`;
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   useEffect(() => {
     try {
-      setCollapsed(localStorage.getItem(storageKey) === "1");
+      // 저장값이 있을 때만 덮어쓴다. 없으면 defaultCollapsed 유지 — 한 번도
+      // 토글 안 한 카드/그룹은 기본 상태를 따라가게.
+      const v = localStorage.getItem(storageKey);
+      if (v !== null) setCollapsed(v === "1");
     } catch {
-      /* localStorage 불가 — 기본 펼침 */
+      /* localStorage 불가 — 기본값 유지 */
     }
   }, [storageKey]);
 

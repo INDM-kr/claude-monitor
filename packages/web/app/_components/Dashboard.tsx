@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
@@ -42,6 +42,22 @@ export function Dashboard({
     const id = setInterval(() => tick(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(id);
   }, [tick]);
+
+  // Expose the live header height as --cm-header-h so the project/session sticky
+  // offsets stay correct when the header grows (filter wrap, connection banner).
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    // floor (not round) so the project bar pins flush-or-slightly-overlapping the
+    // header bottom — rounding up leaves a sub-pixel gap where content peeks through.
+    const apply = () =>
+      document.documentElement.style.setProperty("--cm-header-h", `${Math.floor(el.getBoundingClientRect().height)}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     setInitial(initial);
@@ -118,8 +134,8 @@ export function Dashboard({
   }, [visible, childMap]);
 
   return (
-    <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      <header className="space-y-3">
+    <main className="max-w-7xl mx-auto px-4 py-6">
+      <header ref={headerRef} className="sticky top-0 z-40 -mx-4 -mt-6 mb-6 box-border space-y-3 border-b border-border-subtle bg-[rgb(12_17_23_/_50%)] px-4 pt-6 pb-4 backdrop-blur-[4px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-2.5">
             <span className="text-status-live">◐</span>
@@ -165,13 +181,13 @@ export function Dashboard({
         </div>
       )}
 
-      <footer className="border-t border-border-subtle pt-4 text-xs text-zinc-600">
+      <footer className="sticky bottom-0 z-40 -mx-4 -mb-6 mt-6 box-border border-t border-border-subtle bg-[rgb(12_17_23_/_50%)] px-4 pt-4 pb-6 text-xs text-zinc-400 backdrop-blur-[4px]">
         {t("app.legend")}:{" "}
         <span className="text-status-live">● {t("app.legendLive")}</span>{" "}
         <span className="text-status-waiting">◐ {t("app.legendWaiting")}</span>{" "}
-        <span className="text-zinc-500">○ {t("app.legendIdle")}</span>{" "}
-        <span className="text-zinc-600">· {t("app.legendStop")}</span>
-        <span className="ml-3">— ETA·총 남은시간 표시 안 함</span>
+        <span className="text-zinc-400">○ {t("app.legendIdle")}</span>{" "}
+        <span className="text-zinc-500">· {t("app.legendStop")}</span>
+        <span className="ml-3 text-zinc-500">— ETA·총 남은시간 표시 안 함</span>
       </footer>
     </main>
   );
