@@ -21,6 +21,8 @@ export interface SubagentPathInfo {
   agentId: string;
   /** Composite child id = `${parentUuid}/${agentId}`. */
   childId: string;
+  /** Workflow run id (`wf_<id>`) when under a `subagents/workflows/` run, else null. */
+  wfId: string | null;
 }
 
 const AGENT_FILE_RE = /^agent-[^/]+\.jsonl$/i;
@@ -44,6 +46,12 @@ export function parentInfoFromSubagentPath(
   const parentUuid = segments[subIdx - 1];
   if (!parentUuid) return null;
 
+  // `subagents/workflows/wf_*/agent-*.jsonl` → capture the workflow run id.
+  const wfId =
+    segments[subIdx + 1] === "workflows" && segments[subIdx + 2]?.startsWith("wf_")
+      ? segments[subIdx + 2]!
+      : null;
+
   const agentId = fileName.replace(/\.jsonl$/i, "");
-  return { parentUuid, agentId, childId: subagentChildId(parentUuid, agentId) };
+  return { parentUuid, agentId, childId: subagentChildId(parentUuid, agentId), wfId };
 }

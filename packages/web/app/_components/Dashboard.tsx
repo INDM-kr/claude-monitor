@@ -10,6 +10,7 @@ import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
 import { OrphanChildren } from "./OrphanChildren";
 import { FilterBar } from "./FilterBar";
+import { UsageBar } from "./UsageBar";
 import { t } from "../../lib/i18n/t";
 import { fetchSnapshot } from "../../lib/sync";
 import { useDismissed, dismissKey } from "../../lib/dismissed";
@@ -99,7 +100,7 @@ export function Dashboard({
       // Same filter the server applied on refresh — but with the live clock and
       // the derived status (deriveStatus), so the live view neither drifts from
       // the refresh snapshot nor leaks "stop" sessions into the idle filter.
-      return sessionMatches(s, opts, deriveStatus(now, s.ref.mtime));
+      return sessionMatches(s, opts, deriveStatus(now, s));
     });
   }, [sessions, dismissed, statusParam, now, filter.maxAgeHours, filter.all, filter.filterGlob]);
   const hiddenCount = sessions.size - visible.length;
@@ -119,26 +120,34 @@ export function Dashboard({
   return (
     <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       <header className="space-y-3">
-        <h1 className="text-lg font-semibold text-zinc-100">{t("app.title")}</h1>
-        <FilterBar />
-        <div className="flex items-center gap-3">
-          {!connected && <span className="text-xs text-amber-400">{t("app.connectionLost")}</span>}
-          {hiddenCount > 0 && (
-            <button
-              type="button"
-              onClick={restoreAll}
-              className="text-xs text-zinc-500 hover:text-zinc-300 underline"
-            >
-              {t("dismiss.restoreAll")} ({hiddenCount})
-            </button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-status-live">◐</span>
+            <h1 className="text-base font-semibold text-zinc-100">{t("app.title")}</h1>
+          </div>
+          <UsageBar />
         </div>
+        <FilterBar />
+        {(!connected || hiddenCount > 0) && (
+          <div className="flex items-center gap-3">
+            {!connected && <span className="text-xs text-status-waiting">{t("app.connectionLost")}</span>}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={restoreAll}
+                className="text-xs text-zinc-500 underline hover:text-zinc-300"
+              >
+                {t("dismiss.restoreAll")} ({hiddenCount})
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {groups.length === 0 && orphans.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
-        <div className="font-mono text-[12px]">
+        <div>
           {groups.map((g) => (
             <ProjectGroup
               key={g.projectKey}
@@ -148,14 +157,20 @@ export function Dashboard({
               childrenByParent={childMap}
             />
           ))}
-          <OrphanChildren groups={orphans} />
+          {orphans.length > 0 && (
+            <div className="font-mono text-[12px]">
+              <OrphanChildren groups={orphans} />
+            </div>
+          )}
         </div>
       )}
 
-      <footer className="text-xs text-zinc-600 pt-4 border-t border-border-subtle">
-        {t("app.legend")}: <span className="text-emerald-400">● {t("app.legendLive")}</span>{" "}
-        <span className="text-amber-400">○ {t("app.legendIdle")}</span>{" "}
-        <span className="text-zinc-500">· {t("app.legendStop")}</span>
+      <footer className="border-t border-border-subtle pt-4 text-xs text-zinc-600">
+        {t("app.legend")}:{" "}
+        <span className="text-status-live">● {t("app.legendLive")}</span>{" "}
+        <span className="text-status-waiting">◐ {t("app.legendWaiting")}</span>{" "}
+        <span className="text-zinc-500">○ {t("app.legendIdle")}</span>{" "}
+        <span className="text-zinc-600">· {t("app.legendStop")}</span>
         <span className="ml-3">— ETA·총 남은시간 표시 안 함</span>
       </footer>
     </main>

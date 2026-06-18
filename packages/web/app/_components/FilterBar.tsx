@@ -21,6 +21,7 @@ export function FilterBar() {
 
   const statusOptions = [
     { label: t("filter.statusLive"), value: "live" },
+    { label: t("filter.statusWaiting"), value: "waiting" },
     { label: t("filter.statusIdle"), value: "idle" },
     { label: t("filter.statusStop"), value: "stop" },
   ];

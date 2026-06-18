@@ -1,6 +1,18 @@
-export type SessionStatus = "live" | "idle" | "stop";
+export type SessionStatus = "live" | "idle" | "waiting" | "stop";
 
 export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
+
+/** Lifecycle of a sub-agent / workflow child run (not used for top-level sessions). */
+export type AgentStatus = "done" | "cancelled" | "error" | "running";
+
+export interface AgentMetrics {
+  /** Σ tokens processed (input + cache_creation + output). */
+  tokens: number;
+  /** Number of tool calls. */
+  tools: number;
+  /** Wall-clock duration of the run, seconds. */
+  durationSec: number;
+}
 
 export interface ContextUsage {
   /** 추정 컨텍스트 점유 토큰 (input + cache_read + cache_creation) */
@@ -33,6 +45,8 @@ export interface SessionRef {
   /** For sub-agent/workflow child transcripts: the parent session UUID
    *  (from the `<UUID>/subagents/` path). Undefined for normal/root sessions. */
   parentId?: string;
+  /** Workflow run id (`wf_*`) when the child is under a workflow run; else undefined. */
+  wfId?: string;
 }
 
 export interface PendingSubagent {
@@ -60,6 +74,19 @@ export interface SessionSummary {
   todo: TodoSnapshot | null;
   /** Last assistant text, truncated to 200 chars to match CLI behavior */
   lastText: string | null;
+  /** The session's originating request — first real human turn (system/command/
+   *  meta/tool-result records skipped). Null when none extracted yet. */
+  firstPrompt: string | null;
+  /** All human turns in order (each truncated), for the expanded request history. */
+  userTurns: string[];
+  /** epoch seconds when the current turn started (last human prompt); null if none.
+   *  UI computes live elapsed = now − turnStartSec. */
+  turnStartSec: number | null;
+  /** tokens processed since the last human turn (current-turn burn); null if none. */
+  turnTokens: number | null;
+  /** The last record was an assistant message that finished cleanly (end_turn).
+   *  Drives the "waiting (for next prompt)" status. */
+  endedTurn: boolean;
   /** 세션 실행 러너 (프로세스 프로브서 보강; 기본 unknown) */
   runner: RunnerKind;
   /** 사용 모델 (<synthetic> 제외) */
@@ -72,6 +99,13 @@ export interface SessionSummary {
   context: ContextUsage | null;
   /** 실행 프로세스 PID (존재 시 kill 가능) */
   pid: number | null;
+  /** Workflow phase, for child agents that carry one (else null). */
+  phase?: string | null;
+  /** Lifecycle of a child sub-agent run (✔ done / ✗ cancelled·error / ◐ running);
+   *  null for top-level sessions. */
+  agentStatus?: AgentStatus | null;
+  /** Per-run metrics for child agents (tokens · tools · duration). */
+  metrics?: AgentMetrics | null;
   /** epoch seconds when this summary was computed */
   updatedAt: number;
 }

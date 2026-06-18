@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fold, initial, pendingSubagents, salientDetail, summarizeTodos, usageContextTokens } from "../parser.js";
+import { fold, initial, metricTokens, pendingSubagents, salientDetail, summarizeTasks, summarizeTodos, usageContextTokens } from "../parser.js";
+
+function taskLine(name: string, input: Record<string, unknown>): string {
+  return JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "x", name, input }] } });
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +22,60 @@ function parseFile(name: string) {
   }
   return state;
 }
+
+// Real-shape line builders (human prompt = STRING content; tool_result = array).
+const uStr = (content: string, extra: Record<string, unknown> = {}): string =>
+  JSON.stringify({ type: "user", message: { role: "user", content }, ...extra });
+const uTool = (id: string): string =>
+  JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id }] } });
+const aTurn = (
+  text: string,
+  opts: { stop_reason?: string; usage?: Record<string, number>; timestamp?: string } = {},
+): string =>
+  JSON.stringify({
+    type: "assistant",
+    timestamp: opts.timestamp,
+    message: { role: "assistant", content: [{ type: "text", text }], stop_reason: opts.stop_reason, usage: opts.usage },
+  });
+
+describe("parser fold — user turns + waiting signal", () => {
+  it("captures real human turns in order, skipping system/command/meta/tool_result", () => {
+    let s = initial();
+    [
+      uStr("<system_instruction>\nYou are working inside Conductor…"),
+      uStr("<command-name>/design-html</command-name>"),
+      uStr("ignored skill preamble", { isMeta: true }),
+      uStr("첫 진짜 요청"),
+      uTool("tu_1"),
+      uStr("두번째 요청"),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.userTurns).toEqual(["첫 진짜 요청", "두번째 요청"]);
+  });
+
+  it("turnTokens reset on each human turn, accumulate over assistant msgs after", () => {
+    let s = initial();
+    [
+      uStr("첫 요청", { timestamp: "2026-06-16T00:00:00.000Z" }),
+      aTurn("작업중", { usage: { output_tokens: 100 } }),
+      aTurn("계속", { usage: { output_tokens: 50 }, stop_reason: "end_turn" }),
+      uStr("둘째 요청", { timestamp: "2026-06-16T01:00:00.000Z" }),
+      aTurn("응답", { usage: { output_tokens: 30 } }),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.turnTokens).toBe(30); // only since the last human turn
+    expect(s.lastUserTurnTsMs).toBe(Date.parse("2026-06-16T01:00:00.000Z"));
+  });
+
+  it("endedTurn signal: assistant end_turn last → ended; tool_result last → mid-tool", () => {
+    let ended = initial();
+    [uStr("요청"), aTurn("끝", { stop_reason: "end_turn" })].forEach((l) => (ended = fold(ended, l)));
+    expect(ended.lastRecordType).toBe("assistant");
+    expect(ended.lastStopReason).toBe("end_turn");
+
+    let mid = initial();
+    [uStr("요청"), aTurn("툴", { stop_reason: "tool_use" }), uTool("tu_x")].forEach((l) => (mid = fold(mid, l)));
+    expect(mid.lastRecordType).toBe("user"); // tool running → not a finished turn
+  });
+});
 
 describe("parser fold — idle-session.jsonl", () => {
   it("captures last tool and last text", () => {
@@ -72,6 +130,21 @@ describe("parser fold — pending-subagent.jsonl", () => {
     );
     expect(pendingSubagents(state)[0]?.desc.length).toBe(40);
     expect(pendingSubagents(state)[0]?.type).toBeNull();
+  });
+});
+
+describe("parser fold — TaskCreate/TaskUpdate (Feature H)", () => {
+  it("reconstructs a task snapshot from creation order + status updates", () => {
+    let s = initial();
+    s = fold(s, taskLine("TaskCreate", { subject: "build" }));
+    s = fold(s, taskLine("TaskCreate", { subject: "test" }));
+    s = fold(s, taskLine("TaskUpdate", { taskId: "1", status: "completed" }));
+    s = fold(s, taskLine("TaskUpdate", { taskId: "2", status: "in_progress" }));
+    expect(summarizeTasks(s)).toEqual({ total: 2, done: 1, current: "test", next: null });
+  });
+
+  it("summarizeTasks is null with no tasks", () => {
+    expect(summarizeTasks(initial())).toBeNull();
   });
 });
 
@@ -166,6 +239,52 @@ describe("parser fold — lastActivityDetail (Feature D)", () => {
     expect(salientDetail("WeirdTool", { x: 1 })).toBeNull();
     expect(salientDetail("Bash", {})).toBeNull();
     expect(salientDetail("Bash", { command: "x".repeat(100) })?.length).toBe(60);
+  });
+
+  it("accumulates agent metrics: totalTokens, toolCount, phase, stop_reason, ts", () => {
+    let s = initial();
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T00:00:00.000Z",
+        message: {
+          stop_reason: "tool_use",
+          usage: { input_tokens: 10, cache_creation_input_tokens: 100, output_tokens: 20 },
+          content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "ls", phase: "Review" } }],
+        },
+      }),
+    );
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T00:01:30.000Z",
+        message: {
+          stop_reason: "end_turn",
+          usage: { input_tokens: 5, cache_creation_input_tokens: 0, output_tokens: 15 },
+          content: [{ type: "text", text: "done" }],
+        },
+      }),
+    );
+    expect(s.totalTokens).toBe(150); // (10+100+20) + (5+0+15)
+    expect(s.toolCount).toBe(1);
+    expect(s.phase).toBe("Review");
+    expect(s.lastStopReason).toBe("end_turn");
+    expect(s.firstTsMs).toBe(Date.parse("2026-06-11T00:00:00.000Z"));
+    expect(s.lastTsMs).toBe(Date.parse("2026-06-11T00:01:30.000Z"));
+    expect(s.sawError).toBe(false);
+  });
+
+  it("sawError on an api-error line; sawCancelled on interruption; metricTokens excludes cache_read", () => {
+    let s = initial();
+    s = fold(s, JSON.stringify({ type: "assistant", isApiErrorMessage: true, message: { content: [] } }));
+    expect(s.sawError).toBe(true);
+    const c = fold(initial(), JSON.stringify({ type: "user", message: { content: [{ type: "text", text: "[Request interrupted by user]" }] } }));
+    expect(c.sawCancelled).toBe(true);
+    expect(
+      metricTokens({ input_tokens: 10, cache_creation_input_tokens: 100, cache_read_input_tokens: 9999, output_tokens: 20 }),
+    ).toBe(130);
   });
 
   it("fold sets lastActivityDetail on a tool_use; initial is null", () => {

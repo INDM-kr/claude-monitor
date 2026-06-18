@@ -12,13 +12,15 @@ describe("parentInfoFromSubagentPath", () => {
       parentUuid: UUID,
       agentId: "agent-a08c943af4af58d5d",
       childId: `${UUID}/agent-a08c943af4af58d5d`,
+      wfId: null,
     });
   });
 
-  it("resolves the SAME parentUuid for the nested workflows layout", () => {
+  it("resolves the parentUuid + workflow run id for the nested workflows layout", () => {
     const p = `${ROOT}/${ENC}/${UUID}/subagents/workflows/wf_ce33ae33-f8f/agent-aa892d5c0fdec3712.jsonl`;
     expect(parentInfoFromSubagentPath(ROOT, p)?.parentUuid).toBe(UUID);
     expect(parentInfoFromSubagentPath(ROOT, p)?.agentId).toBe("agent-aa892d5c0fdec3712");
+    expect(parentInfoFromSubagentPath(ROOT, p)?.wfId).toBe("wf_ce33ae33-f8f");
   });
 
   it("returns null for a normal top-level session file", () => {

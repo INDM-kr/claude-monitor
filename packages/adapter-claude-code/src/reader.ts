@@ -1,7 +1,7 @@
 import { open, stat } from "node:fs/promises";
-import type { SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
-import { defaultThresholds, statusFromMtime, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
-import { fold, initial, pendingSubagents, summarizeTodos, type ParserState } from "./parser.js";
+import type { AgentStatus, SessionReader, SessionRef, SessionStatus, SessionSummary } from "@claude-monitor/core";
+import { defaultThresholds, statusFromMtime, deriveSessionStatus, type StatusThresholds, shortenWorkspace, projectIdentityFromCwd, contextLimitForModel, computeContext, runnerFromEntrypoint } from "@claude-monitor/core";
+import { fold, initial, pendingSubagents, summarizeTasks, summarizeTodos, type ParserState } from "./parser.js";
 
 export interface ReaderOptions {
   thresholds?: StatusThresholds;
@@ -9,6 +9,21 @@ export interface ReaderOptions {
 
 const LF = 0x0a;
 const CHUNK = 64 * 1024;
+
+/** Lifecycle of a sub-agent run from its transcript signals. */
+function agentStatusOf(
+  s: ParserState,
+  mtimeSec: number,
+  now: number,
+  thresholds: StatusThresholds,
+): AgentStatus {
+  if (s.sawCancelled) return "cancelled"; // explicit user interruption
+  if (s.sawError) return "error";
+  if (s.lastStopReason === "end_turn") return "done"; // clean finish
+  // No marker: a stopped run finished (e.g. structured-output ends on a tool_use,
+  // not end_turn); a still-recent run is running.
+  return statusFromMtime(mtimeSec, now, thresholds) === "stop" ? "done" : "running";
+}
 
 export class ClaudeCodeReader implements SessionReader {
   private state: ParserState = initial();
@@ -62,20 +77,46 @@ export class ClaudeCodeReader implements SessionReader {
     const context =
       this.state.contextTokens != null ? computeContext(this.state.contextTokens, limit) : null;
 
+    // Agent lifecycle + metrics are only meaningful for sub-agent child runs.
+    const isChild = this.ref.parentId != null;
+    const s = this.state;
+    const durationSec =
+      s.firstTsMs != null && s.lastTsMs != null
+        ? Math.max(0, Math.round((s.lastTsMs - s.firstTsMs) / 1000))
+        : 0;
+
+    const pending = pendingSubagents(this.state);
+    // A finished turn = last record is an assistant message that ended cleanly.
+    const endedTurn = s.lastRecordType === "assistant" && s.lastStopReason === "end_turn";
+    const ageSec = Math.max(0, now - mtimeSec);
+    // Children keep the plain mtime status (lifecycle is in agentStatus); top-level
+    // sessions get the content-aware status (waiting vs live/idle/stop).
+    const status = isChild
+      ? statusFromMtime(mtimeSec, now, this.thresholds)
+      : deriveSessionStatus(ageSec, endedTurn, pending.length > 0, this.thresholds);
+
     const summary: SessionSummary = {
       ref: baseRef,
-      status: statusFromMtime(mtimeSec, now, this.thresholds),
+      status,
       lastTool: this.state.lastToolName,
       lastActivityDetail: this.state.lastActivityDetail,
-      pendingSubagents: pendingSubagents(this.state),
-      todo: summarizeTodos(this.state.lastTodos),
+      pendingSubagents: pending,
+      todo: summarizeTodos(this.state.lastTodos) ?? summarizeTasks(this.state),
       lastText: this.state.lastText,
+      firstPrompt: s.userTurns[0] ?? null,
+      userTurns: s.userTurns,
+      turnStartSec: s.lastUserTurnTsMs != null ? Math.floor(s.lastUserTurnTsMs / 1000) : null,
+      turnTokens: s.userTurns.length > 0 ? s.turnTokens : null,
+      endedTurn,
       runner: runnerFromEntrypoint(this.state.entrypoint, baseRef.workspace),
       model: this.state.model,
       mode: this.state.mode,
       version: this.state.version,
       context,
       pid: null,
+      phase: s.phase,
+      agentStatus: isChild ? agentStatusOf(s, mtimeSec, now, this.thresholds) : null,
+      metrics: isChild ? { tokens: s.totalTokens, tools: s.toolCount, durationSec } : null,
       updatedAt: now,
     };
     this.cached = summary;
