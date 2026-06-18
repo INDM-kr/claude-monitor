@@ -80,7 +80,12 @@ export function SessionCard({
         title={t("card.expand")}
       >
         <span className={clsx("h-2.5 w-2.5 shrink-0 rounded-full", tone.dot, tone.pulse && "live-dot")} />
-        <span className="min-w-0 flex-1 truncate font-medium text-zinc-100 group-hover/row:underline group-hover/row:decoration-dotted group-hover/row:underline-offset-4">
+        <span
+          className={clsx(
+            "min-w-0 flex-1 font-medium text-zinc-100 group-hover/row:underline group-hover/row:decoration-dotted group-hover/row:underline-offset-4",
+            open ? "whitespace-normal text-justify [word-break:break-all]" : "truncate",
+          )}
+        >
           {label}
         </span>
         {ctxPct != null && (
