@@ -115,7 +115,7 @@ export function UsageBar() {
       className="inline-flex items-center gap-3 rounded-full border border-border bg-bg-raised px-3 py-1 font-mono text-[11px]"
       aria-label={t("usage.title")}
     >
-      <span className="text-status-waiting" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡</span>
+      <span className="text-[16px] leading-none" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡️</span>
       <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} />
       <span className="h-3 w-px bg-border" />
       <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} />
