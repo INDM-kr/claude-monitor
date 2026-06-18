@@ -27,8 +27,13 @@ export async function GET(req: NextRequest): Promise<Response> {
     .sort((a, b) => b.ref.mtime - a.ref.mtime);
 
   const projects = groupByProject(summaries);
+  // groupByProject drops child (sub-agent) sessions — they nest under their
+  // parent client-side. Return them alongside so the SSE-reconnect snapshot
+  // (fetchSnapshot) restores children too; otherwise finished sub-agents, which
+  // never re-emit, vanish from the view after any reconnect.
+  const children = summaries.filter((s) => s.ref.parentId);
   return Response.json(
-    { projects },
+    { projects, children },
     { headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } },
   );
 }
