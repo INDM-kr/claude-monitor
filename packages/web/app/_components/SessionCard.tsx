@@ -66,7 +66,7 @@ export function SessionCard({
     >
       {/* head — click to expand */}
       <div
-        className="group/row -mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-0.5 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
+        className="group/row -mx-1.5 flex cursor-pointer items-start gap-2.5 rounded-md px-1.5 py-0.5 hover:bg-accent/[0.07] focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -79,7 +79,7 @@ export function SessionCard({
         aria-expanded={open}
         title={t("card.expand")}
       >
-        <span className={clsx("h-2.5 w-2.5 shrink-0 rounded-full", tone.dot, tone.pulse && "live-dot")} />
+        <span className={clsx("mt-[5px] h-2.5 w-2.5 shrink-0 rounded-full", tone.dot, tone.pulse && "live-dot")} />
         <span
           className={clsx(
             "min-w-0 flex-1 font-medium text-zinc-100 group-hover/row:underline group-hover/row:decoration-dotted group-hover/row:underline-offset-4",
@@ -89,7 +89,7 @@ export function SessionCard({
           {label}
         </span>
         {ctxPct != null && (
-          <span className="flex shrink-0 items-center gap-1.5" title={t("card.context")}>
+          <span className="mt-[3px] flex shrink-0 items-center gap-1.5" title={t("card.context")}>
             <span className="w-[5ch] text-right font-mono text-[11px] tabular-nums text-zinc-500">{ctxPct}%</span>
             <span className="h-[5px] w-16 overflow-hidden rounded-full bg-track">
               <span className={clsx("block h-full rounded-full", ctxColor)} style={{ width: `${ctxPct}%` }} />
@@ -97,14 +97,14 @@ export function SessionCard({
           </span>
         )}
         <span
-          className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100"
+          className="mt-[2px] flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           <DismissButton session={session} />
           <KillButton session={session} />
         </span>
         <svg
-          className={clsx("h-4 w-4 shrink-0 text-zinc-500 transition-transform group-hover/row:text-accent", open && "rotate-180 text-accent")}
+          className={clsx("mt-[2px] h-4 w-4 shrink-0 text-zinc-500 transition-transform group-hover/row:text-accent", open && "rotate-180 text-accent")}
           viewBox="0 0 16 16"
           aria-hidden="true"
         >
