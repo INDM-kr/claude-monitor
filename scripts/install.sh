@@ -19,6 +19,39 @@ echo "→ copy $ROOT/bin/claude-monitor → $BIN_DEST"
 cp "$ROOT/bin/claude-monitor" "$BIN_DEST"
 chmod +x "$BIN_DEST"
 
+# Make `claude-monitor` runnable as a bare command. ~/bin is frequently not on
+# PATH; prefer a symlink into a dir that already is (works in a new shell with no
+# rc edit), else append ~/bin to the shell rc. Never silent — always reports.
+if ! command -v claude-monitor >/dev/null 2>&1; then
+  linked=""
+  for d in "$HOME/.local/bin" "/usr/local/bin"; do
+    case ":$PATH:" in
+      *":$d:"*)
+        if [ -d "$d" ] || mkdir -p "$d" 2>/dev/null; then
+          if ln -sf "$BIN_DEST" "$d/claude-monitor" 2>/dev/null; then linked="$d/claude-monitor"; break; fi
+        fi ;;
+    esac
+  done
+  if [ -n "$linked" ]; then
+    echo "→ linked $linked → $BIN_DEST  (claude-monitor now on PATH)"
+  else
+    case "${SHELL:-}" in
+      *zsh)  rc="$HOME/.zshrc" ;;
+      *bash) rc="$HOME/.bashrc" ;;
+      *)     rc="$HOME/.profile" ;;
+    esac
+    mark="# added by claude-monitor install.sh"
+    if ! grep -qF "$mark" "$rc" 2>/dev/null; then
+      printf '\n%s\nexport PATH="$HOME/bin:$PATH"\n' "$mark" >> "$rc"
+      echo "→ added ~/bin to PATH in $rc  — restart your shell or run: source $rc"
+    else
+      echo "→ ~/bin PATH entry already present in $rc  — restart your shell if claude-monitor isn't found"
+    fi
+  fi
+else
+  echo "→ claude-monitor already resolvable on PATH"
+fi
+
 echo "→ copy $ROOT/app/ClaudeMonitor.app → $APP_DEST"
 rm -rf "$APP_DEST"
 cp -R "$ROOT/app/ClaudeMonitor.app" "$APP_DEST"
