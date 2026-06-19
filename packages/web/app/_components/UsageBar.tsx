@@ -41,8 +41,9 @@ function tone(pct: number | null): { text: string; bar: string } {
   return { text: "text-status-live", bar: "bg-status-live" };
 }
 
-/** One window gauge: label · slim bar · value. Reset time lives in the tooltip. */
-function Gauge({ label, pct, value, title }: { label: string; pct: number | null; value: string; title: string }) {
+/** One window gauge: label · slim bar · value · reset clock. Full remaining-time
+ *  detail stays in the tooltip. */
+function Gauge({ label, pct, value, title, reset }: { label: string; pct: number | null; value: string; title: string; reset?: string | null }) {
   const c = tone(pct);
   return (
     <span className="inline-flex items-center gap-2" title={title}>
@@ -54,6 +55,7 @@ function Gauge({ label, pct, value, title }: { label: string; pct: number | null
         />
       </span>
       <span className={clsx("min-w-[3.4ch] text-right tabular-nums", c.text)}>{value}</span>
+      {reset && <span className="tabular-nums text-zinc-500">↻{reset}</span>}
     </span>
   );
 }
@@ -90,6 +92,8 @@ export function UsageBar() {
   let weekVal: string;
   let blockTip: string;
   let weekTip: string;
+  let blockReset: string | null = null;
+  let weekReset: string | null = null;
 
   if (isApi) {
     blockPct = Math.round(r.api!.fiveHour.pct);
@@ -98,6 +102,8 @@ export function UsageBar() {
     weekVal = `${weekPct}%`;
     blockTip = `${t("usage.block")} ${blockVal}${resetTip(r.api!.fiveHour.resetSec)}`;
     weekTip = `${t("usage.week")} ${weekVal}${resetTip(r.api!.sevenDay.resetSec)}`;
+    blockReset = r.api!.fiveHour.resetSec != null ? fmtClock(r.api!.fiveHour.resetSec) : null;
+    weekReset = r.api!.sevenDay.resetSec != null ? fmtClock(r.api!.sevenDay.resetSec) : null;
   } else {
     const L = r.local;
     const bDenom = L.limits.block ?? (L.block.peakPrior > 0 ? L.block.peakPrior : 0);
@@ -108,6 +114,8 @@ export function UsageBar() {
     weekVal = weekPct != null ? `${weekPct}%` : fmtTok(L.week.tokens);
     blockTip = `${t("usage.block")} ${blockVal} (${t("usage.estimate")})${L.block.active ? resetTip(L.block.resetSec) : ""}`;
     weekTip = `${t("usage.week")} ${weekVal}`;
+    // weekReset stays null — the local estimate has no fixed weekly reset anchor.
+    blockReset = L.block.active && L.block.resetSec != null ? fmtClock(L.block.resetSec) : null;
   }
 
   return (
@@ -116,9 +124,9 @@ export function UsageBar() {
       aria-label={t("usage.title")}
     >
       <span className="text-[16px] leading-none" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡️</span>
-      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} />
+      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} reset={blockReset} />
       <span className="h-3 w-px bg-border" />
-      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} />
+      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} reset={weekReset} />
     </div>
   );
 }

@@ -7,6 +7,7 @@
 #   --max-age-hours N  override age cutoff (default 24)
 #   --filter PATTERN   only project dirs matching glob (default: all)
 #                      e.g. --filter '*indm-codegen*'
+#   --once             render once and exit (default: auto-refresh every 3s in a terminal)
 
 set -u
 
@@ -14,6 +15,7 @@ PROJECTS_DIR="${HOME}/.claude/projects"
 MAX_AGE_HOURS=24
 SHOW_ALL=0
 FILTER='*'
+WATCH=1                 # TTY → auto-refresh loop (watch -ct -n 3); --once disables
 ACTIVE_THRESHOLD=60     # < N seconds since last write → "running"
 RECENT_THRESHOLD=600    # < N seconds → "recent"
 
@@ -22,12 +24,10 @@ while [[ $# -gt 0 ]]; do
     --all) SHOW_ALL=1; shift ;;
     --max-age-hours) MAX_AGE_HOURS=$2; shift 2 ;;
     --filter) FILTER=$2; shift 2 ;;
+    --once) WATCH=0; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
-
-NOW_EPOCH=$(date +%s)
-CUTOFF_EPOCH=$((NOW_EPOCH - MAX_AGE_HOURS * 3600))
 
 color() { printf "\033[%sm%s\033[0m" "$1" "$2"; }
 green()  { color "32" "$1"; }
@@ -78,6 +78,10 @@ def safe_content: (.message.content // []) | if type=="array" then . else [] end
     todo_next: (($todos | map(select(.status=="pending")) | first // {}).content // "")
   }
 '
+
+render() {
+NOW_EPOCH=$(date +%s)
+CUTOFF_EPOCH=$((NOW_EPOCH - MAX_AGE_HOURS * 3600))
 
 # Find project dirs matching filter
 DIRS=()
@@ -170,3 +174,19 @@ fi
 
 printf "\n%s\n" "$(dim '범례: ● LIVE(<60s)   ○ idle(<10m)   · stop')"
 printf "%s\n" "$(dim 'ETA·총 남은시간 표시 안 함 — transcript 에 자체 추정값 없음 (추측 금지)')"
+if [[ $WATCH -eq 1 && -t 1 ]]; then
+  printf "%s\n" "$(dim '자동 새로고침 3s · 종료 Ctrl-C  (1회만: --once)')"
+fi
+}
+
+# Interactive terminal → refresh loop like `watch -ct -n 3`; piped or --once → single render.
+if [[ $WATCH -eq 1 && -t 1 ]]; then
+  trap 'printf "\n"; exit 0' INT
+  while true; do
+    printf '\033[H\033[2J'
+    render
+    sleep 3
+  done
+else
+  render
+fi
