@@ -226,12 +226,19 @@ export function fold(state: ParserState, line: string): ParserState {
   return state;
 }
 
-/** Real human turn: not meta, STRING content, non-empty, not a wrapper tag. */
+/** Single-char option answers ("A", "B", "1", "2", optionally "A)" / "1.") that
+ *  reply to a Claude question — not a real request, so excluded from the turns. */
+const OPTION_ANSWER_RE = /^[A-Za-z0-9][).]?$/;
+
+/** Real human turn: not meta, STRING content, non-empty, not a wrapper tag, and
+ *  not a single-char answer to a Claude question. */
 function isHumanTurn(obj: ParsedLine, raw: unknown): raw is string {
   if (obj.isMeta === true) return false;
   if (typeof raw !== "string") return false;
   const t = raw.trim();
-  return t.length > 0 && !t.startsWith("<");
+  if (t.length === 0 || t.startsWith("<")) return false;
+  if (OPTION_ANSWER_RE.test(t)) return false;
+  return true;
 }
 
 /**

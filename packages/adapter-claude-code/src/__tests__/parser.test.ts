@@ -52,6 +52,12 @@ describe("parser fold — user turns + waiting signal", () => {
     expect(s.userTurns).toEqual(["첫 진짜 요청", "두번째 요청"]);
   });
 
+  it("단일문자 옵션 답변(A/B, 1/2, '1)')은 요청에서 제외", () => {
+    let s = initial();
+    [uStr("진짜 요청"), uStr("A"), uStr("2"), uStr("1)"), uStr("실제 후속 요청")].forEach((l) => (s = fold(s, l)));
+    expect(s.userTurns).toEqual(["진짜 요청", "실제 후속 요청"]);
+  });
+
   it("turnTokens reset on each human turn, accumulate over assistant msgs after", () => {
     let s = initial();
     [
