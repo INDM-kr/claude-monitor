@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { globToRegExp, sessionMatches } from "../filter";
+import { globToRegExp, sessionMatches, filterWithVisibleChildren } from "../filter";
 import type { SessionSummary } from "@claude-monitor/core";
 
 function mk(over: Partial<SessionSummary["ref"]> & { mtime: number }): SessionSummary {
@@ -35,5 +35,30 @@ describe("filter", () => {
   it("globToRegExp 이스케이프", () => {
     expect(globToRegExp("a.b*").test("a.bXY")).toBe(true);
     expect(globToRegExp("a.b").test("aXb")).toBe(false);
+  });
+});
+
+describe("filterWithVisibleChildren", () => {
+  const now = 1_000_000;
+  const opts = { statuses: [] as string[], maxAgeHours: 1, all: false, filterGlob: null, now };
+
+  it("부모 루트가 보이면 오래된 자식도 유지(나이 면제)", () => {
+    const root = mk({ id: "p", mtime: now - 100 }); // recent → visible
+    const oldChild = mk({ id: "c", parentId: "p", mtime: now - 99999 }); // old, would be trimmed alone
+    const out = filterWithVisibleChildren([root, oldChild], opts);
+    expect(out.map((s) => s.ref.id).sort()).toEqual(["c", "p"]);
+  });
+
+  it("부모 루트가 잘리고 자식도 오래되면 둘 다 제외", () => {
+    const oldRoot = mk({ id: "p", mtime: now - 99999 });
+    const oldChild = mk({ id: "c", parentId: "p", mtime: now - 99999 });
+    expect(filterWithVisibleChildren([oldRoot, oldChild], opts)).toEqual([]);
+  });
+
+  it("부모가 잘려도 자식이 독립적으로 매치하면 orphan으로 유지", () => {
+    const oldRoot = mk({ id: "p", mtime: now - 99999 });
+    const freshChild = mk({ id: "c", parentId: "p", mtime: now - 100 });
+    const out = filterWithVisibleChildren([oldRoot, freshChild], opts);
+    expect(out.map((s) => s.ref.id)).toEqual(["c"]);
   });
 });

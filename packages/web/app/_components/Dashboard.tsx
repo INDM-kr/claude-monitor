@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type { SessionSummary } from "@claude-monitor/core";
 import { useSessionStore } from "../../lib/store";
 import { groupByProject, childrenByParent } from "../../lib/group";
-import { parseStatuses, sessionMatches } from "../../lib/filter";
+import { parseStatuses, filterWithVisibleChildren } from "../../lib/filter";
 import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
 import { OrphanChildren } from "./OrphanChildren";
@@ -111,13 +111,13 @@ export function Dashboard({
       statuses,
       now,
     };
-    return [...sessions.values()].filter((s) => {
-      if (dismissed.has(dismissKey(s))) return false;
-      // Same filter the server applied on refresh — but with the live clock and
-      // the derived status (deriveStatus), so the live view neither drifts from
-      // the refresh snapshot nor leaks "stop" sessions into the idle filter.
-      return sessionMatches(s, opts, deriveStatus(now, s));
-    });
+    // Same filter the server applied on refresh — but with the live clock and the
+    // derived status (deriveStatus), so the live view neither drifts from the
+    // refresh snapshot nor leaks "stop" sessions into the idle filter. Children of
+    // a surviving root are kept regardless of their own (older) age, so a live
+    // session's sub-agent tree doesn't vanish.
+    const notDismissed = [...sessions.values()].filter((s) => !dismissed.has(dismissKey(s)));
+    return filterWithVisibleChildren(notDismissed, opts, (s) => deriveStatus(now, s));
   }, [sessions, dismissed, statusParam, now, filter.maxAgeHours, filter.all, filter.filterGlob]);
   const hiddenCount = sessions.size - visible.length;
   const groups = useMemo(() => groupByProject(visible), [visible]);

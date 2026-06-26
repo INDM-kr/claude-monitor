@@ -1,6 +1,6 @@
 import { getDataSource } from "../lib/data-source/local";
 import { loadConfig } from "../lib/config";
-import { sessionMatches, parseStatuses } from "../lib/filter";
+import { filterWithVisibleChildren, parseStatuses } from "../lib/filter";
 import type { ProjectGroupData } from "../lib/group";
 import { Dashboard } from "./_components/Dashboard";
 
@@ -21,9 +21,13 @@ export default async function Page({
 
   const ds = getDataSource();
   const now = Math.floor(Date.now() / 1000);
-  const summaries = (await ds.snapshot()).filter((s) =>
-    sessionMatches(s, { maxAgeHours: maxAge, all, filterGlob, statuses, now }),
-  );
+  const summaries = filterWithVisibleChildren(await ds.snapshot(), {
+    maxAgeHours: maxAge,
+    all,
+    filterGlob,
+    statuses,
+    now,
+  });
 
   // Seed the store with the flat list (incl. child sub-agent sessions); the
   // Dashboard groups roots and nests children client-side. Pass the resolved

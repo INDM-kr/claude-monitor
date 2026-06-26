@@ -50,3 +50,41 @@ export function sessionMatches(
   }
   return true;
 }
+
+/**
+ * Filter a flat session list, but keep a child (sub-agent) session whenever its
+ * parent root survives the filter — regardless of the child's own age.
+ *
+ * A sub-agent's transcript stops being written when the agent finishes, so its
+ * mtime is older (often much older) than the still-active parent session. Running
+ * the per-session maxAge cutoff over children therefore trims a live session's
+ * whole sub-agent tree, which then renders empty. Children of a surviving root are
+ * exempted from the age cutoff; a child whose parent did NOT survive falls back to
+ * the normal per-session match (so a genuine orphan can still surface on its own).
+ *
+ * @param statusOf optional per-session status (e.g. client deriveStatus) used by
+ * sessionMatches; the server omits it and relies on s.status.
+ */
+export function filterWithVisibleChildren(
+  list: SessionSummary[],
+  o: FilterOpts,
+  statusOf?: (s: SessionSummary) => string,
+): SessionSummary[] {
+  const keptRoots = new Set<string>();
+  const roots: SessionSummary[] = [];
+  for (const s of list) {
+    if (s.ref.parentId) continue;
+    if (sessionMatches(s, o, statusOf?.(s))) {
+      roots.push(s);
+      keptRoots.add(s.ref.id);
+    }
+  }
+  const children: SessionSummary[] = [];
+  for (const s of list) {
+    if (!s.ref.parentId) continue;
+    if (keptRoots.has(s.ref.parentId) || sessionMatches(s, o, statusOf?.(s))) {
+      children.push(s);
+    }
+  }
+  return [...roots, ...children];
+}

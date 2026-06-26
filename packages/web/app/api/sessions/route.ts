@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { getDataSource } from "../../../lib/data-source/local";
 import { checkBearer, unauthorized } from "../../../lib/auth/middleware";
 import { loadConfig } from "../../../lib/config";
-import { sessionMatches, parseStatuses } from "../../../lib/filter";
+import { filterWithVisibleChildren, parseStatuses } from "../../../lib/filter";
 import { groupByProject } from "../../../lib/group";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +22,13 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const now = Math.floor(Date.now() / 1000);
   const ds = getDataSource();
-  const summaries = (await ds.snapshot())
-    .filter((s) => sessionMatches(s, { maxAgeHours, all, filterGlob, statuses, now }))
-    .sort((a, b) => b.ref.mtime - a.ref.mtime);
+  const summaries = filterWithVisibleChildren(await ds.snapshot(), {
+    maxAgeHours,
+    all,
+    filterGlob,
+    statuses,
+    now,
+  }).sort((a, b) => b.ref.mtime - a.ref.mtime);
 
   const projects = groupByProject(summaries);
   // groupByProject drops child (sub-agent) sessions — they nest under their
