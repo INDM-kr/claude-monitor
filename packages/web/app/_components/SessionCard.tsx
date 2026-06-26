@@ -130,9 +130,10 @@ export function SessionCard({
         <Link
           href={`/session/${session.ref.id}?adapter=${session.ref.adapterId}`}
           onClick={(e) => e.stopPropagation()}
-          className="text-zinc-600 hover:text-accent hover:underline"
+          title={shortSid(session.ref.id)}
+          className="ml-auto inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] text-cyan-400 transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"
         >
-          {shortSid(session.ref.id)}
+          {t("card.detail")} ↗
         </Link>
       </div>
 
