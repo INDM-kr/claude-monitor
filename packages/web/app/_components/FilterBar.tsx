@@ -15,7 +15,9 @@ const AGE_OPTIONS = [
 export function FilterBar() {
   const router = useRouter();
   const params = useSearchParams();
-  const maxAge = params.get("maxAgeHours") ?? "24";
+  // "전체" sets ?all=1 and drops maxAgeHours; without accounting for `all`, the
+  // active highlight would fall back to "24" and never mark 전체 (and keep 24h lit).
+  const maxAge = params.get("all") === "1" ? "" : (params.get("maxAgeHours") ?? "24");
   const filter = params.get("filter") ?? "";
   const selectedStatuses = new Set(parseStatuses(params.get("status")));
 
