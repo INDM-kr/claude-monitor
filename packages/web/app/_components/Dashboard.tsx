@@ -8,7 +8,6 @@ import { groupByProject, childrenByParent } from "../../lib/group";
 import { parseStatuses, filterWithVisibleChildren } from "../../lib/filter";
 import { deriveStatus } from "../../lib/derive-status";
 import { ProjectGroup } from "./ProjectGroup";
-import { OrphanChildren } from "./OrphanChildren";
 import { FilterBar } from "./FilterBar";
 import { UsageBar } from "./UsageBar";
 import { t } from "../../lib/i18n/t";
@@ -124,14 +123,6 @@ export function Dashboard({
   // Child (sub-agent) sessions render nested under their parent card, not as
   // top-level cards. groupByProject already excludes them from the groups.
   const childMap = useMemo(() => childrenByParent(visible), [visible]);
-  // Orphans: visible children whose parent isn't a visible root (filtered out
-  // by status/age). Surfaced under a synthetic parent header, never dropped.
-  const orphans = useMemo(() => {
-    const rootIds = new Set(visible.filter((s) => !s.ref.parentId).map((s) => s.ref.id));
-    return [...childMap.entries()]
-      .filter(([parentId]) => !rootIds.has(parentId))
-      .map(([parentId, children]) => ({ parentId, children }));
-  }, [visible, childMap]);
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-6">
@@ -160,7 +151,7 @@ export function Dashboard({
         )}
       </header>
 
-      {groups.length === 0 && orphans.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="text-sm text-zinc-500">{t("app.noSessions")}</div>
       ) : (
         <div>
@@ -173,11 +164,6 @@ export function Dashboard({
               childrenByParent={childMap}
             />
           ))}
-          {orphans.length > 0 && (
-            <div className="font-mono text-[12px]">
-              <OrphanChildren groups={orphans} />
-            </div>
-          )}
         </div>
       )}
 

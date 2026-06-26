@@ -59,8 +59,8 @@ export function sessionMatches(
  * mtime is older (often much older) than the still-active parent session. Running
  * the per-session maxAge cutoff over children therefore trims a live session's
  * whole sub-agent tree, which then renders empty. Children of a surviving root are
- * exempted from the age cutoff; a child whose parent did NOT survive falls back to
- * the normal per-session match (so a genuine orphan can still surface on its own).
+ * exempted from the age cutoff; a child whose parent did NOT survive (an orphan)
+ * is hidden rather than floated on its own under a synthetic header.
  *
  * @param statusOf optional per-session status (e.g. client deriveStatus) used by
  * sessionMatches; the server omits it and relies on s.status.
@@ -82,9 +82,7 @@ export function filterWithVisibleChildren(
   const children: SessionSummary[] = [];
   for (const s of list) {
     if (!s.ref.parentId) continue;
-    if (keptRoots.has(s.ref.parentId) || sessionMatches(s, o, statusOf?.(s))) {
-      children.push(s);
-    }
+    if (keptRoots.has(s.ref.parentId)) children.push(s);
   }
   return [...roots, ...children];
 }

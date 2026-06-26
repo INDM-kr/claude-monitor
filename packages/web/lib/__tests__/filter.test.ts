@@ -55,10 +55,9 @@ describe("filterWithVisibleChildren", () => {
     expect(filterWithVisibleChildren([oldRoot, oldChild], opts)).toEqual([]);
   });
 
-  it("부모가 잘려도 자식이 독립적으로 매치하면 orphan으로 유지", () => {
+  it("부모가 잘리면 자식은 독립적으로 매치해도 숨김(orphan 미표시)", () => {
     const oldRoot = mk({ id: "p", mtime: now - 99999 });
     const freshChild = mk({ id: "c", parentId: "p", mtime: now - 100 });
-    const out = filterWithVisibleChildren([oldRoot, freshChild], opts);
-    expect(out.map((s) => s.ref.id)).toEqual(["c"]);
+    expect(filterWithVisibleChildren([oldRoot, freshChild], opts)).toEqual([]);
   });
 });
