@@ -31,6 +31,11 @@ export class LocalDataSource implements DataSource {
   private discovered = false;
   private discoverPromise: Promise<void> | null = null;
   private unsubAdapterEvents: Array<() => void> = [];
+  // The 1M context window ([1m]) only shows in the live process args, never the
+  // transcript. Remember each session's detected limit so context % stays correct
+  // after the process exits (else it falls back to the 200k default). In-memory:
+  // reset on server restart.
+  private readonly ctxLimits = new Map<string, number>();
 
   constructor(adapters?: AISessionAdapter[]) {
     const cfg = loadConfig();
@@ -102,11 +107,16 @@ export class LocalDataSource implements DataSource {
 
     const probe = await probeProcesses();
     const e = probe.get(summary.ref.id);
-    if (!e) return ref === summary.ref ? summary : { ...summary, ref };
 
-    const limit = e.contextLimit ?? summary.context?.limit ?? null;
+    // Remember a positively-detected context limit (1M for [1m]) so it survives
+    // the process exiting; reuse it as the fallback when no live process is found.
+    if (e?.contextLimit) this.ctxLimits.set(summary.ref.id, e.contextLimit);
+    const limit = e?.contextLimit ?? this.ctxLimits.get(summary.ref.id) ?? summary.context?.limit ?? null;
     const context =
       summary.context && limit ? computeContext(summary.context.tokens, limit) : summary.context;
+
+    if (!e) return { ...summary, ref, context };
+
     // Live probe wins only when it positively classified the runner; otherwise
     // keep the reader's entrypoint-derived fallback (so stopped/unclassified
     // live procs still show a badge).

@@ -25,15 +25,35 @@ function fmtTok(n: number): string {
   if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
   return String(n);
 }
+// Time remaining until reset, Korean units like Claude Desktop ("4시간 42분 후
+// 재설정"). Adds days when the reset is more than a day out (e.g. weekly early in
+// the week → "5일 3시간"); minutes are dropped once days are shown.
 function fmtUntil(sec: number): string {
-  if (sec <= 0) return "0m";
-  const h = Math.floor(sec / 3600);
+  if (sec <= 0) return "0분";
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  if (d > 0) return h > 0 ? `${d}일 ${h}시간` : `${d}일`;
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
 }
-function fmtClock(sec: number): string {
-  return new Date(sec * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function fmtClock(sec: number, withDay = false): string {
+  const d = new Date(sec * 1000);
+  // 24h clock (h23) so it never renders AM/PM. The weekly reset prepends the
+  // weekday (e.g. "토 22:00") so "오후" isn't mistaken for a daily reset.
+  const time = d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return withDay ? `${d.toLocaleDateString("ko-KR", { weekday: "short" })} ${time}` : time;
 }
+// Window lengths for the elapsed-time background fill. 5h block is exact; the 7d
+// label is treated as a nominal 7-day window (the only anchor the API exposes is
+// the next reset, so start = reset − window).
+const BLOCK_SEC = 5 * 3600;
+const WEEK_SEC = 7 * 86400;
+function timePctOf(resetSec: number | null, win: number, now: number): number | null {
+  if (resetSec == null) return null;
+  const elapsed = win - (resetSec - now);
+  return Math.max(0, Math.min(100, (elapsed / win) * 100));
+}
+
 function tone(pct: number | null): { text: string; bar: string } {
   if (pct == null) return { text: "text-zinc-400", bar: "bg-zinc-500" };
   if (pct >= 90) return { text: "text-status-error", bar: "bg-status-error" };
@@ -41,21 +61,50 @@ function tone(pct: number | null): { text: string; bar: string } {
   return { text: "text-status-live", bar: "bg-status-live" };
 }
 
-/** One window gauge: label · slim bar · value · reset clock. Full remaining-time
- *  detail stays in the tooltip. */
-function Gauge({ label, pct, value, title, reset }: { label: string; pct: number | null; value: string; title: string; reset?: string | null }) {
+/** One window gauge: label · slim bar · value · reset (click to rotate the reset
+ *  display through clock / remaining / both). */
+function Gauge({
+  label,
+  pct,
+  value,
+  title,
+  reset,
+  onResetClick,
+  timePct,
+}: {
+  label: string;
+  pct: number | null;
+  value: string;
+  title: string;
+  reset?: string | null;
+  onResetClick?: () => void;
+  timePct?: number | null;
+}) {
   const c = tone(pct);
   return (
     <span className="inline-flex items-center gap-2" title={title}>
       <span className="text-zinc-500">{label}</span>
-      <span className="h-[5px] w-[52px] overflow-hidden rounded-full border border-border bg-track">
+      <span className="relative h-[5px] w-[52px] overflow-hidden rounded-full border border-border bg-track">
+        {/* background fill = elapsed time through the window (start → reset) */}
+        {timePct != null && (
+          <span className="absolute inset-y-0 left-0 rounded-full bg-zinc-600/50" style={{ width: `${timePct}%` }} />
+        )}
         <span
-          className={clsx("block h-full rounded-full transition-[width] duration-500", c.bar)}
+          className={clsx("relative block h-full rounded-full transition-[width] duration-500", c.bar)}
           style={{ width: `${pct == null ? 0 : Math.max(pct, 4)}%` }}
         />
       </span>
       <span className={clsx("min-w-[3.4ch] text-right tabular-nums", c.text)}>{value}</span>
-      {reset && <span className="tabular-nums text-zinc-500">↻{reset}</span>}
+      {reset && (
+        <button
+          type="button"
+          onClick={onResetClick}
+          title={t("usage.resetToggle")}
+          className="tabular-nums text-zinc-500 hover:text-zinc-300"
+        >
+          ↻{reset}
+        </button>
+      )}
     </span>
   );
 }
@@ -65,6 +114,9 @@ function Gauge({ label, pct, value, title, reset }: { label: string; pct: number
 export function UsageBar() {
   const now = useSessionStore((s) => s.now);
   const [r, setR] = useState<Resp | null>(null);
+  // Reset display rotates on click: 0 = clock, 1 = time remaining, 2 = both.
+  const [resetMode, setResetMode] = useState(0);
+  const cycleReset = () => setResetMode((m) => (m + 1) % 3);
 
   useEffect(() => {
     let alive = true;
@@ -85,6 +137,15 @@ export function UsageBar() {
   const isApi = r.source === "api" && r.api;
   const resetTip = (sec: number | null) =>
     sec == null ? "" : ` · ${t("usage.reset")} ${fmtClock(sec)} (${fmtUntil(sec - now)})`;
+  // Inline reset label per the rotation mode. isWeek adds the weekday to the clock.
+  const fmtReset = (sec: number | null, isWeek: boolean): string | null => {
+    if (sec == null) return null;
+    const remain = fmtUntil(sec - now);
+    const clock = fmtClock(sec, isWeek);
+    // Default (mode 0) = time remaining, like Claude Desktop. Click rotates to the
+    // reset clock, then both.
+    return resetMode === 0 ? remain : resetMode === 1 ? clock : `${remain} · ${clock}`;
+  };
 
   let blockPct: number | null;
   let weekPct: number | null;
@@ -92,8 +153,8 @@ export function UsageBar() {
   let weekVal: string;
   let blockTip: string;
   let weekTip: string;
-  let blockReset: string | null = null;
-  let weekReset: string | null = null;
+  let blockResetSec: number | null = null;
+  let weekResetSec: number | null = null;
 
   if (isApi) {
     blockPct = Math.round(r.api!.fiveHour.pct);
@@ -102,8 +163,8 @@ export function UsageBar() {
     weekVal = `${weekPct}%`;
     blockTip = `${t("usage.block")} ${blockVal}${resetTip(r.api!.fiveHour.resetSec)}`;
     weekTip = `${t("usage.week")} ${weekVal}${resetTip(r.api!.sevenDay.resetSec)}`;
-    blockReset = r.api!.fiveHour.resetSec != null ? fmtClock(r.api!.fiveHour.resetSec) : null;
-    weekReset = r.api!.sevenDay.resetSec != null ? fmtClock(r.api!.sevenDay.resetSec) : null;
+    blockResetSec = r.api!.fiveHour.resetSec;
+    weekResetSec = r.api!.sevenDay.resetSec;
   } else {
     const L = r.local;
     const bDenom = L.limits.block ?? (L.block.peakPrior > 0 ? L.block.peakPrior : 0);
@@ -114,9 +175,11 @@ export function UsageBar() {
     weekVal = weekPct != null ? `${weekPct}%` : fmtTok(L.week.tokens);
     blockTip = `${t("usage.block")} ${blockVal} (${t("usage.estimate")})${L.block.active ? resetTip(L.block.resetSec) : ""}`;
     weekTip = `${t("usage.week")} ${weekVal}`;
-    // weekReset stays null — the local estimate has no fixed weekly reset anchor.
-    blockReset = L.block.active && L.block.resetSec != null ? fmtClock(L.block.resetSec) : null;
+    // weekResetSec stays null — the local estimate has no fixed weekly reset anchor.
+    blockResetSec = L.block.active ? L.block.resetSec : null;
   }
+  const blockReset = fmtReset(blockResetSec, false);
+  const weekReset = fmtReset(weekResetSec, true);
 
   return (
     <div
@@ -124,9 +187,9 @@ export function UsageBar() {
       aria-label={t("usage.title")}
     >
       <span className="text-[16px] leading-none" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡️</span>
-      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} reset={blockReset} />
+      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} reset={blockReset} onResetClick={cycleReset} timePct={timePctOf(blockResetSec, BLOCK_SEC, now)} />
       <span className="h-3 w-px bg-border" />
-      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} reset={weekReset} />
+      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} reset={weekReset} onResetClick={cycleReset} timePct={timePctOf(weekResetSec, WEEK_SEC, now)} />
     </div>
   );
 }

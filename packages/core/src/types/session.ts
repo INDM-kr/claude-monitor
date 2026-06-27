@@ -79,6 +79,9 @@ export interface SessionSummary {
   firstPrompt: string | null;
   /** All human turns in order (each truncated), for the expanded request history. */
   userTurns: string[];
+  /** Claude's response to each user turn (same index as userTurns; the last
+   *  assistant text of that turn, truncated). Optional — older summaries omit it. */
+  userResponses?: string[];
   /** epoch seconds when the current turn started (last human prompt); null if none.
    *  UI computes live elapsed = now − turnStartSec. */
   turnStartSec: number | null;
@@ -106,6 +109,10 @@ export interface SessionSummary {
   agentStatus?: AgentStatus | null;
   /** Per-run metrics for child agents (tokens · tools · duration). */
   metrics?: AgentMetrics | null;
+  /** Cumulative tokens for the whole session (Σ input + cache_creation + output).
+   *  Optional — shown on the card/detail, not in the sub-agent tree (metrics covers
+   *  children there). */
+  totalTokens?: number | null;
   /** epoch seconds when this summary was computed */
   updatedAt: number;
 }

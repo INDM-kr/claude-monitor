@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import type { SessionStatus, SessionSummary } from "@claude-monitor/core";
@@ -24,6 +25,11 @@ function fmtTok(n: number): string {
   if (n >= 1e6) return `↓${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `↓${(n / 1e3).toFixed(1)}k`;
   return `↓${n}`;
+}
+function fmtCount(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+  return String(n);
 }
 function fmtElapsed(sec: number): string {
   if (sec < 60) return `${sec}s`;
@@ -50,17 +56,28 @@ export function SessionCard({
   // opened open. Default collapsed (true) — untouched cards stay closed.
   const [collapsed, toggleOpen] = useCollapsed(`card:${session.ref.id}`, true);
   const open = !collapsed;
+  // Per-request accordion: which turns have their response revealed (ephemeral).
+  const [openTurns, setOpenTurns] = useState<Set<number>>(() => new Set());
+  const toggleTurn = (n: number) =>
+    setOpenTurns((s) => {
+      const next = new Set(s);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
   const age = Math.max(0, now - session.ref.mtime);
   const status = deriveStatus(now, session);
   const tone = TONE[status];
   const live = status === "live";
   const userTurns = session.userTurns ?? [];
+  const userResponses = session.userResponses ?? [];
   // Title = the most recent user request; the full history below is newest-first.
   const lastTurn = userTurns[userTurns.length - 1];
   const label = lastTurn ?? session.firstPrompt ?? (session.lastText ? truncate(session.lastText, 90) : t("card.request"));
   const ctxPct = session.context ? Math.round(session.context.pct * 100) : null;
   const ctxColor = ctxPct == null ? "" : ctxPct >= 90 ? "bg-status-error" : ctxPct >= 70 ? "bg-status-waiting" : "bg-status-live";
-  const turns = [...userTurns].reverse(); // newest first
+  // Newest-first request history, each paired with Claude's response to that turn.
+  const turns = userTurns.map((turn, j) => ({ turn, response: userResponses[j] ?? "", n: j + 1 })).reverse();
 
   return (
     <article
@@ -127,12 +144,16 @@ export function SessionCard({
         <RunnerBadge runner={session.runner} />
         {session.model && <span className="text-accent">{session.model}</span>}
         {session.mode && <span className="text-accent-purple">· {session.mode}</span>}
+        {session.totalTokens != null && session.totalTokens > 0 && (
+          <span title={t("card.sessionTokens")}>Σ {fmtCount(session.totalTokens)}</span>
+        )}
         <Link
           href={`/session/${session.ref.id}?adapter=${session.ref.adapterId}`}
           onClick={(e) => e.stopPropagation()}
-          className="text-zinc-600 hover:text-accent hover:underline"
+          title={shortSid(session.ref.id)}
+          className="ml-auto inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] text-cyan-400 transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"
         >
-          {shortSid(session.ref.id)}
+          {t("card.detail")} ↗
         </Link>
       </div>
 
@@ -189,20 +210,34 @@ export function SessionCard({
             <>
               <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{t("card.request")}</h4>
               <ol className="mb-3 space-y-1">
-                {turns.map((turn, i) => {
+                {turns.map((item, i) => {
                   const latest = i === 0 && turns.length > 1; // newest sits first after reverse
-                  const chronoNum = turns.length - i; // keep the chronological number (original request = 1)
+                  const hasResp = item.response.length > 0;
+                  const isOpen = openTurns.has(item.n);
                   return (
-                    <li key={i} className="flex gap-2.5 text-[13px] leading-relaxed">
-                      <span
-                        className={clsx(
-                          "mt-0.5 grid h-[17px] w-[17px] shrink-0 place-items-center rounded-full border font-mono text-[10px]",
-                          latest ? "border-status-live text-status-live" : "border-border text-zinc-600",
-                        )}
+                    <li key={item.n} className="text-[13px] leading-relaxed">
+                      <div
+                        className={clsx("flex gap-2.5", hasResp && "cursor-pointer rounded hover:bg-accent/[0.05]")}
+                        onClick={hasResp ? () => toggleTurn(item.n) : undefined}
+                        title={hasResp ? t("card.responseToggle") : undefined}
                       >
-                        {chronoNum}
-                      </span>
-                      <span className={latest ? "text-zinc-100" : "text-zinc-400"}>{turn}</span>
+                        <span
+                          className={clsx(
+                            "mt-0.5 grid h-[17px] w-[17px] shrink-0 place-items-center rounded-full border font-mono text-[10px]",
+                            latest ? "border-status-live text-status-live" : "border-border text-zinc-600",
+                          )}
+                        >
+                          {item.n}
+                        </span>
+                        <span className={clsx("flex-1", latest ? "text-zinc-100" : "text-zinc-400")}>{item.turn}</span>
+                        {hasResp && <span className="mt-0.5 shrink-0 font-mono text-[10px] text-zinc-600">{isOpen ? "▾" : "▸"}</span>}
+                      </div>
+                      {isOpen && hasResp && (
+                        <p className="mb-1 ml-[27px] mt-1 whitespace-pre-wrap border-l-2 border-border pl-2.5 text-[12px] leading-relaxed text-zinc-400">
+                          <span className="mr-1 text-zinc-600">💬</span>
+                          {item.response}
+                        </p>
+                      )}
                     </li>
                   );
                 })}

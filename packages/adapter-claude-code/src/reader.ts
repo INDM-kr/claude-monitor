@@ -105,6 +105,7 @@ export class ClaudeCodeReader implements SessionReader {
       lastText: this.state.lastText,
       firstPrompt: s.userTurns[0] ?? null,
       userTurns: s.userTurns,
+      userResponses: s.userResponses,
       turnStartSec: s.lastUserTurnTsMs != null ? Math.floor(s.lastUserTurnTsMs / 1000) : null,
       turnTokens: s.userTurns.length > 0 ? s.turnTokens : null,
       endedTurn,
@@ -117,6 +118,9 @@ export class ClaudeCodeReader implements SessionReader {
       phase: s.phase,
       agentStatus: isChild ? agentStatusOf(s, mtimeSec, now, this.thresholds) : null,
       metrics: isChild ? { tokens: s.totalTokens, tools: s.toolCount, durationSec } : null,
+      // Cumulative session tokens for every session (card + detail). Sub-agent trees
+      // keep using `metrics.tokens` so the same value isn't shown twice.
+      totalTokens: s.totalTokens,
       updatedAt: now,
     };
     this.cached = summary;
