@@ -18,7 +18,7 @@ export const ko = {
     block: "세션(5h)",
     week: "주간(7d)",
     reset: "리셋",
-    resetToggle: "클릭: 리셋 표시 전환 (시각 → 남은시간 → 둘다)",
+    resetToggle: "클릭: 리셋 표시 전환 (남은시간 → 시각 → 둘다)",
     peak: "최근 최대",
     limit: "한도",
     real: "실제 (Claude 계정)",

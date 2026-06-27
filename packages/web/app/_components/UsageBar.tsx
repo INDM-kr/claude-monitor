@@ -25,11 +25,16 @@ function fmtTok(n: number): string {
   if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
   return String(n);
 }
+// Time remaining until reset, Korean units like Claude Desktop ("4시간 42분 후
+// 재설정"). Adds days when the reset is more than a day out (e.g. weekly early in
+// the week → "5일 3시간"); minutes are dropped once days are shown.
 function fmtUntil(sec: number): string {
-  if (sec <= 0) return "0m";
-  const h = Math.floor(sec / 3600);
+  if (sec <= 0) return "0분";
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  if (d > 0) return h > 0 ? `${d}일 ${h}시간` : `${d}일`;
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
 }
 function fmtClock(sec: number, withDay = false): string {
   const d = new Date(sec * 1000);
@@ -118,9 +123,11 @@ export function UsageBar() {
   // Inline reset label per the rotation mode. isWeek adds the weekday to the clock.
   const fmtReset = (sec: number | null, isWeek: boolean): string | null => {
     if (sec == null) return null;
-    const clock = fmtClock(sec, isWeek);
     const remain = fmtUntil(sec - now);
-    return resetMode === 0 ? clock : resetMode === 1 ? remain : `${clock} · ${remain}`;
+    const clock = fmtClock(sec, isWeek);
+    // Default (mode 0) = time remaining, like Claude Desktop. Click rotates to the
+    // reset clock, then both.
+    return resetMode === 0 ? remain : resetMode === 1 ? clock : `${remain} · ${clock}`;
   };
 
   let blockPct: number | null;
