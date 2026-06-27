@@ -43,6 +43,17 @@ function fmtClock(sec: number, withDay = false): string {
   const time = d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return withDay ? `${d.toLocaleDateString("ko-KR", { weekday: "short" })} ${time}` : time;
 }
+// Window lengths for the elapsed-time background fill. 5h block is exact; the 7d
+// label is treated as a nominal 7-day window (the only anchor the API exposes is
+// the next reset, so start = reset − window).
+const BLOCK_SEC = 5 * 3600;
+const WEEK_SEC = 7 * 86400;
+function timePctOf(resetSec: number | null, win: number, now: number): number | null {
+  if (resetSec == null) return null;
+  const elapsed = win - (resetSec - now);
+  return Math.max(0, Math.min(100, (elapsed / win) * 100));
+}
+
 function tone(pct: number | null): { text: string; bar: string } {
   if (pct == null) return { text: "text-zinc-400", bar: "bg-zinc-500" };
   if (pct >= 90) return { text: "text-status-error", bar: "bg-status-error" };
@@ -59,6 +70,7 @@ function Gauge({
   title,
   reset,
   onResetClick,
+  timePct,
 }: {
   label: string;
   pct: number | null;
@@ -66,14 +78,19 @@ function Gauge({
   title: string;
   reset?: string | null;
   onResetClick?: () => void;
+  timePct?: number | null;
 }) {
   const c = tone(pct);
   return (
     <span className="inline-flex items-center gap-2" title={title}>
       <span className="text-zinc-500">{label}</span>
-      <span className="h-[5px] w-[52px] overflow-hidden rounded-full border border-border bg-track">
+      <span className="relative h-[5px] w-[52px] overflow-hidden rounded-full border border-border bg-track">
+        {/* background fill = elapsed time through the window (start → reset) */}
+        {timePct != null && (
+          <span className="absolute inset-y-0 left-0 rounded-full bg-zinc-600/50" style={{ width: `${timePct}%` }} />
+        )}
         <span
-          className={clsx("block h-full rounded-full transition-[width] duration-500", c.bar)}
+          className={clsx("relative block h-full rounded-full transition-[width] duration-500", c.bar)}
           style={{ width: `${pct == null ? 0 : Math.max(pct, 4)}%` }}
         />
       </span>
@@ -170,9 +187,9 @@ export function UsageBar() {
       aria-label={t("usage.title")}
     >
       <span className="text-[16px] leading-none" title={isApi ? t("usage.real") : t("usage.estimate")}>⚡️</span>
-      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} reset={blockReset} onResetClick={cycleReset} />
+      <Gauge label="5h" pct={blockPct} value={blockVal} title={blockTip} reset={blockReset} onResetClick={cycleReset} timePct={timePctOf(blockResetSec, BLOCK_SEC, now)} />
       <span className="h-3 w-px bg-border" />
-      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} reset={weekReset} onResetClick={cycleReset} />
+      <Gauge label="7d" pct={weekPct} value={weekVal} title={weekTip} reset={weekReset} onResetClick={cycleReset} timePct={timePctOf(weekResetSec, WEEK_SEC, now)} />
     </div>
   );
 }
