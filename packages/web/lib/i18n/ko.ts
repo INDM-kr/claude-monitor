@@ -75,6 +75,14 @@ export const ko = {
     requests: "내 요청 · 응답",
     sessionTokens: "세션 누적 토큰",
   },
+  project: {
+    since: "시작",
+    sessions: "세션",
+    totalTokens: "누적 토큰",
+    activity: "활동 (토큰 사용량 잔디 · 요일/시간 패턴)",
+    sessionList: "세션 목록",
+    detail: "프로젝트",
+  },
   errors: {
     title: "문제가 발생했습니다",
     retry: "다시 시도",
