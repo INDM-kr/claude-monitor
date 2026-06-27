@@ -33,6 +33,9 @@ export interface ParserState {
   lastText: string | null;
   /** Real human turns in order (system/command/meta/tool-result skipped, truncated). */
   userTurns: string[];
+  /** Claude's response per human turn (same index as userTurns) — the last
+   *  assistant text seen during that turn, truncated. */
+  userResponses: string[];
   /** epoch ms of the most recent human turn (current turn start); null if none. */
   lastUserTurnTsMs: number | null;
   /** tokens processed since the last human turn (reset on each human turn). */
@@ -77,6 +80,7 @@ export function initial(): ParserState {
     taskSeq: 0,
     lastText: null,
     userTurns: [],
+    userResponses: [],
     lastUserTurnTsMs: null,
     turnTokens: 0,
     lastRecordType: null,
@@ -200,6 +204,11 @@ export function fold(state: ParserState, line: string): ParserState {
         const text = String(c.text ?? "").trim();
         if (text) {
           state.lastText = text.slice(0, LAST_TEXT_MAX);
+          // Attribute this assistant text to the current (most recent) human turn;
+          // later texts in the same turn overwrite, leaving the turn's final reply.
+          if (state.userResponses.length > 0) {
+            state.userResponses[state.userResponses.length - 1] = state.lastText;
+          }
         }
       }
     }
@@ -210,8 +219,12 @@ export function fold(state: ParserState, line: string): ParserState {
     const raw = obj.message?.content;
     if (isHumanTurn(obj, raw)) {
       state.userTurns.push(raw.trim().slice(0, HUMAN_TURN_MAX));
+      state.userResponses.push(""); // filled by assistant texts that follow this turn
       // Preserve the original task ([0]); drop oldest-after-first when over cap.
-      if (state.userTurns.length > USER_TURNS_CAP) state.userTurns.splice(1, 1);
+      if (state.userTurns.length > USER_TURNS_CAP) {
+        state.userTurns.splice(1, 1);
+        state.userResponses.splice(1, 1);
+      }
       state.turnTokens = 0; // a new turn begins
       if (state.lastTsMs != null) state.lastUserTurnTsMs = state.lastTsMs;
     }

@@ -10,6 +10,12 @@ import { RunnerBadge } from "../../_components/RunnerBadge";
 
 export const dynamic = "force-dynamic";
 
+function fmtCount(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+  return String(n);
+}
+
 export default async function SessionDetail({
   params,
   searchParams,
@@ -41,9 +47,38 @@ export default async function SessionDetail({
             {s.mode && <span>· {s.mode} </span>}
             {s.version && <span>· v{s.version}</span>}
           </div>
+          {s.totalTokens != null && s.totalTokens > 0 && (
+            <div>
+              {t("detail.sessionTokens")}: <span className="text-zinc-300">{fmtCount(s.totalTokens)}</span>
+            </div>
+          )}
         </div>
         <ContextBar context={s.context} />
       </header>
+
+      {s.userTurns.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm text-zinc-300">{t("detail.requests")}</h2>
+          <ol className="space-y-3">
+            {s.userTurns.map((turn, j) => (
+              <li key={j} className="space-y-1 text-sm">
+                <div className="flex gap-2.5">
+                  <span className="mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border border-border font-mono text-[10px] text-zinc-500">
+                    {j + 1}
+                  </span>
+                  <span className="flex-1 text-zinc-200">{turn}</span>
+                </div>
+                {s.userResponses?.[j] && (
+                  <p className="ml-[28px] whitespace-pre-wrap border-l-2 border-border pl-3 text-[13px] leading-relaxed text-zinc-400">
+                    <span className="mr-1 text-zinc-600">💬</span>
+                    {s.userResponses[j]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="text-sm text-zinc-300">{t("detail.usageTrend")}</h2>

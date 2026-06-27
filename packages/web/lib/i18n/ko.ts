@@ -39,6 +39,8 @@ export const ko = {
     request: "내 요청",
     history: "요청 히스토리",
     detail: "상세",
+    sessionTokens: "이 세션 누적 토큰",
+    responseToggle: "클릭: 이 요청에 대한 응답 펼침",
     waitingInput: "사용자 입력 대기",
     expand: "클릭하면 전체 요청·작업·서브에이전트 펼침",
   },
@@ -70,6 +72,8 @@ export const ko = {
     todos: "할 일",
     subagents: "대기 sub-agent",
     lastMessage: "마지막 메시지",
+    requests: "내 요청 · 응답",
+    sessionTokens: "세션 누적 토큰",
   },
   errors: {
     title: "문제가 발생했습니다",

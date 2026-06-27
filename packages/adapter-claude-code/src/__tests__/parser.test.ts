@@ -58,6 +58,19 @@ describe("parser fold — user turns + waiting signal", () => {
     expect(s.userTurns).toEqual(["진짜 요청", "실제 후속 요청"]);
   });
 
+  it("userResponses: 요청별로 그 턴의 마지막 assistant 텍스트가 같은 인덱스로 페어링", () => {
+    let s = initial();
+    [
+      uStr("첫 요청"),
+      aTurn("중간 응답"),
+      aTurn("첫 요청 최종 응답"),
+      uStr("두번째 요청"),
+      aTurn("두번째 최종 응답"),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.userTurns).toEqual(["첫 요청", "두번째 요청"]);
+    expect(s.userResponses).toEqual(["첫 요청 최종 응답", "두번째 최종 응답"]);
+  });
+
   it("turnTokens reset on each human turn, accumulate over assistant msgs after", () => {
     let s = initial();
     [
