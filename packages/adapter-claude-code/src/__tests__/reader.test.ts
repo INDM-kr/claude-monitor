@@ -176,4 +176,34 @@ describe("ClaudeCodeReader incremental tail", () => {
     const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
     expect(sum.agentStatus).toBeNull();
   });
+
+  it("ref.mtime tracks the last TIMESTAMPED record, not a bumped file mtime", async () => {
+    // Conversation ended at a fixed past time; a later metadata write bumps the
+    // file mtime to ~now. ref.mtime must reflect the conversation, not the file.
+    const turnTs = "2026-06-11T00:00:00.000Z";
+    const turnSec = Math.floor(Date.parse(turnTs) / 1000);
+    const convo = JSON.stringify({
+      type: "assistant",
+      timestamp: turnTs,
+      message: { stop_reason: "end_turn", content: [{ type: "text", text: "done" }] },
+    });
+    // A trailing metadata record with NO timestamp (mirrors file-history-snapshot
+    // / ai-title bridge records that bump the file long after the last turn).
+    const meta = JSON.stringify({ type: "file-history-snapshot", snapshot: {} });
+    await fs.writeFile(file, convo + "\n" + meta + "\n");
+    // Force the file mtime far into the "recent" window.
+    const nowSec = Math.floor(Date.now() / 1000);
+    await fs.utimes(file, nowSec, nowSec);
+
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.ref.mtime).toBe(turnSec); // last timestamped record, not the bumped file mtime
+    expect(sum.status).toBe("stop"); // genuinely old → not "live"/"waiting" despite fresh file mtime
+  });
+
+  it("falls back to file mtime when no record carries a timestamp", async () => {
+    await fs.writeFile(file, LINE_A + "\n" + LINE_C + "\n"); // neither line has a timestamp
+    const fileMtime = Math.floor((await fs.stat(file)).mtimeMs / 1000);
+    const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    expect(sum.ref.mtime).toBe(fileMtime);
+  });
 });
