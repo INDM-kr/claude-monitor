@@ -40,7 +40,10 @@ export interface SessionRef {
   owner: string;
   /** Absolute path to source file/log */
   source: string;
-  /** mtime epoch seconds */
+  /** Last-activity epoch seconds — the last TIMESTAMPED transcript record, NOT
+   *  the raw file mtime (which metadata/bridge writes bump long after the last
+   *  real turn). Falls back to file mtime when the transcript has no timestamps.
+   *  Drives the age filter, sort order, and status. */
   mtime: number;
   /** For sub-agent/workflow child transcripts: the parent session UUID
    *  (from the `<UUID>/subagents/` path). Undefined for normal/root sessions. */

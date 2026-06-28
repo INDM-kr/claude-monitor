@@ -56,6 +56,16 @@ export class ClaudeCodeReader implements SessionReader {
 
     const now = Math.floor(Date.now() / 1000);
 
+    // "Last activity" = the last TIMESTAMPED conversation record, not the file
+    // mtime. The file mtime is unreliable: Desktop-bridge / metadata records
+    // (file-history-snapshot, ai-title, bridge-session, mode, …) carry no
+    // timestamp and bump the file long after the last real turn, making a stale
+    // session look recent (observed: mtime up to ~18h ahead of the last turn).
+    // Drives the age filter, sort, and status. Falls back to file mtime when the
+    // transcript has no timestamped records at all.
+    const activitySec =
+      this.state.lastTsMs != null ? Math.floor(this.state.lastTsMs / 1000) : mtimeSec;
+
     // cwd가 있으면 lossy decoded ref를 정정
     const cwd = this.state.cwd;
     const baseRef = cwd
@@ -68,10 +78,10 @@ export class ClaudeCodeReader implements SessionReader {
             projectKey: id.key,
             projectLabel: id.label,
             owner: id.owner,
-            mtime: mtimeSec,
+            mtime: activitySec,
           };
         })()
-      : { ...this.ref, mtime: mtimeSec };
+      : { ...this.ref, mtime: activitySec };
 
     const limit = contextLimitForModel(this.state.model);
     const context =
@@ -88,11 +98,11 @@ export class ClaudeCodeReader implements SessionReader {
     const pending = pendingSubagents(this.state);
     // A finished turn = last record is an assistant message that ended cleanly.
     const endedTurn = s.lastRecordType === "assistant" && s.lastStopReason === "end_turn";
-    const ageSec = Math.max(0, now - mtimeSec);
-    // Children keep the plain mtime status (lifecycle is in agentStatus); top-level
-    // sessions get the content-aware status (waiting vs live/idle/stop).
+    const ageSec = Math.max(0, now - activitySec);
+    // Children keep the plain age-bucket status (lifecycle is in agentStatus);
+    // top-level sessions get the content-aware status (waiting vs live/idle/stop).
     const status = isChild
-      ? statusFromMtime(mtimeSec, now, this.thresholds)
+      ? statusFromMtime(activitySec, now, this.thresholds)
       : deriveSessionStatus(ageSec, endedTurn, pending.length > 0, this.thresholds);
 
     const summary: SessionSummary = {
@@ -116,7 +126,7 @@ export class ClaudeCodeReader implements SessionReader {
       context,
       pid: null,
       phase: s.phase,
-      agentStatus: isChild ? agentStatusOf(s, mtimeSec, now, this.thresholds) : null,
+      agentStatus: isChild ? agentStatusOf(s, activitySec, now, this.thresholds) : null,
       metrics: isChild ? { tokens: s.totalTokens, tools: s.toolCount, durationSec } : null,
       // Cumulative session tokens for every session (card + detail). Sub-agent trees
       // keep using `metrics.tokens` so the same value isn't shown twice.

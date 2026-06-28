@@ -8,11 +8,12 @@ import type {
   SessionSummary,
 } from "@claude-monitor/core";
 import { computeContext } from "@claude-monitor/core";
-import { ClaudeCodeAdapter } from "@claude-monitor/adapter-claude-code";
+import { ClaudeCodeAdapter, CoworkAdapter } from "@claude-monitor/adapter-claude-code";
 import { getHub } from "../sse/hub";
 import { loadConfig } from "../config";
 import { probeProcesses } from "../process-probe";
 import { remoteProject } from "../git-remote";
+import { findProjectRoot } from "../project-root";
 
 const DEBOUNCE_MS = 150;
 
@@ -39,10 +40,17 @@ export class LocalDataSource implements DataSource {
 
   constructor(adapters?: AISessionAdapter[]) {
     const cfg = loadConfig();
-    this._adapters =
-      adapters && adapters.length > 0
-        ? adapters
-        : [new ClaudeCodeAdapter({ projectsDir: cfg.projectsDir, thresholds: cfg.thresholds })];
+    if (adapters && adapters.length > 0) {
+      this._adapters = adapters;
+    } else {
+      const list: AISessionAdapter[] = [
+        new ClaudeCodeAdapter({ projectsDir: cfg.projectsDir, thresholds: cfg.thresholds }),
+      ];
+      if (cfg.enableCowork) {
+        list.push(new CoworkAdapter({ coworkDir: cfg.coworkDir, thresholds: cfg.thresholds }));
+      }
+      this._adapters = list;
+    }
   }
 
   adapters(): AISessionAdapter[] {
@@ -99,14 +107,31 @@ export class LocalDataSource implements DataSource {
   private async enrich(summary: SessionSummary): Promise<SessionSummary> {
     // Group by the repo's origin remote URL when resolvable (unifies worktrees /
     // clones of the same repo regardless of path). cwd gone / no remote → keep
-    // the reader's cwd-derived projectKey.
-    const remote = await remoteProject(summary.ref.workspace);
-    const ref: SessionRef = remote
-      ? { ...summary.ref, projectKey: remote.key, projectLabel: remote.label }
-      : summary.ref;
+    // the reader's cwd-derived projectKey. Only Claude Code sessions have a repo
+    // workspace; skip the `git` spawn for cowork (its workspace is a synthetic
+    // label, and walking up could mis-resolve against an ancestor `.git`).
+    const isClaudeCode = summary.ref.adapterId === "claude-code";
+    const remote = isClaudeCode ? await remoteProject(summary.ref.workspace) : null;
+    let ref: SessionRef = summary.ref;
+    if (remote) {
+      ref = { ...summary.ref, projectKey: remote.key, projectLabel: remote.label };
+    } else if (isClaudeCode) {
+      // Non-git fallback: fold a subfolder of a non-git project (e.g. a `_plan`
+      // planning dir) into the nearest ancestor that owns a root marker
+      // (VCS dir / CLAUDE.md), so it groups with the project instead of as its own.
+      const root = await findProjectRoot(summary.ref.workspace);
+      if (root && root.key !== summary.ref.projectKey) {
+        ref = { ...summary.ref, projectKey: root.key, projectLabel: root.label };
+      }
+    }
 
     const probe = await probeProcesses();
-    const e = probe.get(summary.ref.id);
+    // The ps probe (and ctxLimits) are keyed by the bare session id. Only Claude
+    // Code sessions have a live `claude` process; gate the lookup by adapterId so
+    // a cowork id can't collide with a Claude Code session id and borrow its
+    // pid/runner/context-limit. (Cowork's runner/pid/context come from the reader
+    // and survive when `e` is undefined.)
+    const e = summary.ref.adapterId === "claude-code" ? probe.get(summary.ref.id) : undefined;
 
     // Remember a positively-detected context limit (1M for [1m]) so it survives
     // the process exiting; reuse it as the fallback when no live process is found.

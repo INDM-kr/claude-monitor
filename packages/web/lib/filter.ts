@@ -1,5 +1,11 @@
 import type { SessionSummary } from "@claude-monitor/core";
 
+// Must match CoworkAdapter.id / COWORK_ADAPTER_ID. Inlined (not imported from the
+// adapter package) because filter.ts is bundled into client components, and that
+// package pulls in node-only deps (chokidar/fs) — mirrors the inline "claude-code"
+// adapter-id checks used elsewhere (e.g. data-source/local.ts enrich()).
+const COWORK_ADAPTER_ID = "claude-cowork";
+
 export function globToRegExp(g: string): RegExp {
   const re = g
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -38,7 +44,11 @@ export function sessionMatches(
 ): boolean {
   const status = statusOverride ?? s.status;
   if (o.statuses.length > 0 && !o.statuses.includes(status)) return false;
-  if (!o.all && o.maxAgeHours != null && Number.isFinite(o.maxAgeHours)) {
+  // Cowork is opt-in (CM_ENABLE_COWORK) and historical by nature — exempt it from
+  // the default recency cutoff so enabling the flag actually surfaces the
+  // sessions instead of an empty dashboard. The `all`/glob/status filters still apply.
+  const ageExempt = s.ref.adapterId === COWORK_ADAPTER_ID;
+  if (!o.all && !ageExempt && o.maxAgeHours != null && Number.isFinite(o.maxAgeHours)) {
     const cutoff = o.now - o.maxAgeHours * 3600;
     if (s.ref.mtime < cutoff) return false;
   }

@@ -21,6 +21,17 @@ describe("filter", () => {
   it("all=true는 age 무시", () => {
     expect(sessionMatches(mk({ mtime: 0 }), { ...base, maxAgeHours: 1, all: true, filterGlob: null, now })).toBe(true);
   });
+  it("cowork 어댑터는 age 컷오프 면제 (opt-in/historical)", () => {
+    // 같은 나이의 claude-code 세션은 컷오프됨 (위 테스트), cowork는 표시됨.
+    const old = { mtime: now - 7200 };
+    expect(sessionMatches(mk({ ...old, adapterId: "claude-code" }), { ...base, maxAgeHours: 1, all: false, filterGlob: null, now })).toBe(false);
+    expect(sessionMatches(mk({ ...old, adapterId: "claude-cowork" }), { ...base, maxAgeHours: 1, all: false, filterGlob: null, now })).toBe(true);
+  });
+  it("cowork도 status/glob 필터는 여전히 적용", () => {
+    const oldCowork = mk({ mtime: now - 7200, adapterId: "claude-cowork", projectLabel: "Claude Desktop" });
+    // glob 불일치 → 제외 (age 면제가 다른 필터까지 무력화하지 않음)
+    expect(sessionMatches(oldCowork, { ...base, maxAgeHours: 1, all: false, filterGlob: "*zzz*", now })).toBe(false);
+  });
   it("glob은 workspace/short/label 매칭", () => {
     expect(sessionMatches(mk({ mtime: now, projectLabel: "claude-monitor" }), { ...base, maxAgeHours: null, all: true, filterGlob: "*monitor*", now })).toBe(true);
     expect(sessionMatches(mk({ mtime: now, workspace: "/a/b" , workspaceShort:"b", projectLabel:"b"}), { ...base, maxAgeHours: null, all: true, filterGlob: "*zzz*", now })).toBe(false);
