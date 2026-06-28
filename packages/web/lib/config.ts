@@ -1,12 +1,20 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultThresholds, type StatusThresholds } from "@claude-monitor/core";
+import { defaultCoworkDir } from "@claude-monitor/adapter-claude-code";
 
 function intEnv(name: string, fallback: number): number {
   const v = process.env[name];
   if (!v) return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/** Truthy env flag (`1`/`true`/`yes`/`on`, case-insensitive); else `fallback`. */
+function boolEnv(name: string, fallback: boolean): boolean {
+  const v = process.env[name];
+  if (v == null || v === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(v);
 }
 
 /** Optional positive-int env (a token limit); null when unset/invalid. */
@@ -27,6 +35,11 @@ export interface AppConfig {
    *  the recent peak block. */
   blockTokenLimit: number | null;
   weeklyTokenLimit: number | null;
+  /** Expose Claude Desktop cowork (local-agent-mode) sessions. Opt-in via
+   *  `CM_ENABLE_COWORK` — off by default (cowork data is local-only/historical). */
+  enableCowork: boolean;
+  /** Cowork sessions root (override with `CM_COWORK_DIR`). */
+  coworkDir: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -40,5 +53,7 @@ export function loadConfig(): AppConfig {
     bearerToken: process.env.CM_BEARER_TOKEN || null,
     blockTokenLimit: intEnvOrNull("CM_BLOCK_TOKEN_LIMIT"),
     weeklyTokenLimit: intEnvOrNull("CM_WEEKLY_TOKEN_LIMIT"),
+    enableCowork: boolEnv("CM_ENABLE_COWORK", false),
+    coworkDir: process.env.CM_COWORK_DIR || defaultCoworkDir(),
   };
 }
