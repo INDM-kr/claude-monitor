@@ -134,7 +134,10 @@ export function fold(state: ParserState, line: string): ParserState {
   const obj = JSON.parse(line) as ParsedLine;
   const content = Array.isArray(obj?.message?.content) ? obj.message!.content! : [];
 
-  if (typeof obj.cwd === "string") state.cwd = obj.cwd;
+  // first-wins: 세션의 프로젝트 = 시작 디렉토리. 세션 중 cd(하위 디렉토리 등)로
+  // 이후 레코드의 cwd가 바뀌어도 프로젝트 귀속은 유지한다 (transcript가 저장되는
+  // ~/.claude/projects/<encoded>/ 디렉토리도 시작 cwd 기준이다).
+  if (state.cwd == null && typeof obj.cwd === "string") state.cwd = obj.cwd;
   if (typeof obj.gitBranch === "string") state.gitBranch = obj.gitBranch;
   if (typeof obj.version === "string") state.version = obj.version;
   if (typeof obj.entrypoint === "string") state.entrypoint = obj.entrypoint;

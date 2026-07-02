@@ -225,6 +225,15 @@ describe("parser metadata enrichment", () => {
     expect(s.contextTokens).toBe(110);
   });
 
+  it("cwd는 first-wins — 세션 중 cd해도 시작 디렉토리 유지", () => {
+    // 실제 사례: pickko에서 시작한 세션이 도중에 pickko/pickko_admin으로 cd →
+    // last-wins면 프로젝트가 pickko_admin으로 오분류됨.
+    let s = initial();
+    s = fold(s, JSON.stringify({ type: "user", cwd: "/Users/x/PhpstormProjects/pickko" }));
+    s = fold(s, JSON.stringify({ type: "assistant", cwd: "/Users/x/PhpstormProjects/pickko/pickko_admin", message: { content: [] } }));
+    expect(s.cwd).toBe("/Users/x/PhpstormProjects/pickko");
+  });
+
   it("<synthetic> 모델은 무시", () => {
     let s = initial();
     s = fold(s, JSON.stringify({ type: "assistant", message: { model: "claude-opus-4-8", content: [] } }));
