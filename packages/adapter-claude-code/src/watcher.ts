@@ -55,6 +55,9 @@ export class ProjectsWatcher extends EventEmitter {
     this.watcher.on("add", (path) => this.handleAdd(path));
     this.watcher.on("change", (path) => this.handleChange(path));
     this.watcher.on("unlink", (path) => this.handleUnlink(path));
+    // FSWatcher is an EventEmitter — an unhandled "error" would otherwise
+    // become an uncaught exception and crash the whole monitor.
+    this.watcher.on("error", () => {});
   }
 
   async stop(): Promise<void> {
@@ -158,6 +161,8 @@ export class ProjectsWatcher extends EventEmitter {
       this.subWatcher.on("add", (p) => this.handleAdd(p));
       this.subWatcher.on("change", (p) => this.handleChange(p));
       this.subWatcher.on("unlink", (p) => this.handleUnlink(p));
+      // Same crash guard as the main watcher — see start().
+      this.subWatcher.on("error", () => {});
     } else {
       this.subWatcher.add(dir);
     }
