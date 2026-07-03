@@ -8,7 +8,7 @@ import type {
   SessionSummary,
 } from "@claude-monitor/core";
 import { computeContext } from "@claude-monitor/core";
-import { ClaudeCodeAdapter, CoworkAdapter } from "@claude-monitor/adapter-claude-code";
+import { ChatAdapter, ClaudeCodeAdapter, CoworkAdapter } from "@claude-monitor/adapter-claude-code";
 import { getHub } from "../sse/hub";
 import { loadConfig } from "../config";
 import { probeProcesses } from "../process-probe";
@@ -48,6 +48,9 @@ export class LocalDataSource implements DataSource {
       ];
       if (cfg.enableCowork) {
         list.push(new CoworkAdapter({ coworkDir: cfg.coworkDir, thresholds: cfg.thresholds }));
+      }
+      if (cfg.enableChat) {
+        list.push(new ChatAdapter({ idbDir: cfg.chatIdbDir, thresholds: cfg.thresholds }));
       }
       this._adapters = list;
     }
