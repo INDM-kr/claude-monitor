@@ -15,3 +15,17 @@ export {
 export { normalizeCoworkLine, type NormalizedCoworkLine } from "./cowork/normalize.js";
 export { tailLines } from "./cowork/tail.js";
 export { COWORK_ADAPTER_ID, COWORK_DISPLAY, defaultCoworkDir } from "./cowork/constants.js";
+export { ChatAdapter, type ChatAdapterOptions } from "./chat/adapter.js";
+export { ChatReader, type ChatReaderOptions } from "./chat/reader.js";
+export { ChatWatcher, type ChatWatcherOptions } from "./chat/watcher.js";
+export { ChatStore, type ChatSnapshot } from "./chat/store.js";
+export {
+  parseReactQueryBlob,
+  stripBlinkEnvelope,
+  extractConversations,
+  conversationMtime,
+  type ChatConversation,
+  type ChatMessage,
+  type ChatFingerprint,
+} from "./chat/parse.js";
+export { CHAT_ADAPTER_ID, CHAT_DISPLAY, CHAT_PROJECT_KEY, defaultChatIdbDir } from "./chat/constants.js";

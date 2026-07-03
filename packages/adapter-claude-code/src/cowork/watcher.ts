@@ -91,6 +91,9 @@ export class CoworkWatcher extends EventEmitter {
     this.watcher.on("add", (path) => void this.handle(path, "added").catch(() => {}));
     this.watcher.on("change", (path) => void this.handle(path, "changed").catch(() => {}));
     this.watcher.on("unlink", (path) => this.handleUnlink(path));
+    // FSWatcher is an EventEmitter — an unhandled "error" (e.g. EACCES on the
+    // TCC-protected ~/Library tree) would otherwise crash the whole monitor.
+    this.watcher.on("error", () => {});
   }
 
   async stop(): Promise<void> {

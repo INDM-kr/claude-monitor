@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultThresholds, type StatusThresholds } from "@claude-monitor/core";
-import { defaultCoworkDir } from "@claude-monitor/adapter-claude-code";
+import { defaultChatIdbDir, defaultCoworkDir } from "@claude-monitor/adapter-claude-code";
 
 function intEnv(name: string, fallback: number): number {
   const v = process.env[name];
@@ -40,6 +40,12 @@ export interface AppConfig {
   enableCowork: boolean;
   /** Cowork sessions root (override with `CM_COWORK_DIR`). */
   coworkDir: string;
+  /** Expose claude.ai chat conversations from Claude Desktop's IndexedDB cache.
+   *  Opt-in via `CM_ENABLE_CHAT` — off by default (the cache's app schema can
+   *  change with any claude.ai deploy; the adapter degrades to empty results). */
+  enableChat: boolean;
+  /** Claude Desktop IndexedDB root (override with `CM_CHAT_IDB_DIR`). */
+  chatIdbDir: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -55,5 +61,7 @@ export function loadConfig(): AppConfig {
     weeklyTokenLimit: intEnvOrNull("CM_WEEKLY_TOKEN_LIMIT"),
     enableCowork: boolEnv("CM_ENABLE_COWORK", false),
     coworkDir: process.env.CM_COWORK_DIR || defaultCoworkDir(),
+    enableChat: boolEnv("CM_ENABLE_CHAT", false),
+    chatIdbDir: process.env.CM_CHAT_IDB_DIR || defaultChatIdbDir(),
   };
 }

@@ -131,6 +131,8 @@ bash scripts/uninstall.sh
 | `CLAUDE_PROJECTS_DIR` | 세션 트랜스크립트(JSONL) 소스 디렉터리 | `$HOME/.claude/projects` |
 | `CM_ENABLE_COWORK` | Claude Desktop **cowork**(local-agent-mode) 대화를 세션 목록에 노출. `1`/`true`/`yes`/`on`이면 켜짐 | 미설정 → `false` (꺼짐) |
 | `CM_COWORK_DIR` | cowork 세션 루트 디렉터리 | `$HOME/Library/Application Support/Claude/local-agent-mode-sessions` |
+| `CM_ENABLE_CHAT` | Claude Desktop의 **claude.ai 일반 채팅** 대화를 세션 목록에 노출(실험 기능). `1`/`true`/`yes`/`on`이면 켜짐 | 미설정 → `false` (꺼짐) |
+| `CM_CHAT_IDB_DIR` | Claude Desktop IndexedDB 루트(그 아래 `https_claude.ai_*.indexeddb.blob`을 스캔) | `$HOME/Library/Application Support/Claude/IndexedDB` |
 
 > 주의 (`CM_BEARER_TOKEN`): 토큰을 설정하면 **브라우저 UI가 정상 동작하지 않습니다**. 브라우저는 페이지 이동·SSE 연결에 커스텀 `Authorization` 헤더를 실어 보낼 수 없으므로, 실시간 업데이트(SSE)와 Kill 버튼이 fail-closed로 막힙니다. 토큰 모드는 헤드리스/프로그램 방식 API 클라이언트 용도로만 사용하세요.
 >
@@ -139,6 +141,8 @@ bash scripts/uninstall.sh
 > 참고 (`PORT`): 기본 포트는 11314이며 `start-web.sh`가 `PORT`를 노출합니다. 다만 내부 시작 명령에 포트가 명시(`next start -p 11314`)되어 있어, 환경 변경 시 동작은 실행 환경에 따라 달라질 수 있습니다.
 >
 > 참고 (`CM_ENABLE_COWORK`): 켜면 Claude Desktop cowork 세션이 `Claude Desktop` 러너 배지와 함께 한 프로젝트 그룹으로 묶여 표시됩니다. cowork는 본질적으로 과거 데이터일 수 있어 **`CM_MAX_AGE_HOURS` 컷오프에서 면제**됩니다(플래그를 켜면 나이와 무관하게 표시 — `status`·`filter` 필터는 그대로 적용). cowork `audit.jsonl`은 추가-전용(append-only) 로그라 일반 세션과 동일한 증분 와칭으로 라이브 갱신되며, 슬래시 명령 전용 턴은 (Claude Code와 동일하게) 프롬프트 라벨로 표시되지 않고, 토큰 합계는 공유 파서의 기존 집계 방식을 따릅니다.
+>
+> 참고 (`CM_ENABLE_CHAT`, 실험 기능): claude.ai 웹뷰가 IndexedDB에 남기는 react-query 캐시를 읽어 **최근 대화 목록**(제목·요약·모델·최근 활동, 라이브)을 `Claude Chat` 그룹으로 표시합니다. 최근에 **연** 대화는 캐시에 전문(tree)이 남아 있어 턴 내역까지 보이고, 나머지는 메타데이터만 보입니다(전체 이력 미러 아님 — 캐시에 있는 만큼만). cowork와 달리 `CM_MAX_AGE_HOURS` 컷오프가 **그대로 적용**됩니다(목록이 라이브라 최근 활동 채팅이 자연스럽게 노출; 전체는 `all` 파라미터로 열람). 캐시 포맷·앱 스키마는 claude.ai 배포에 따라 바뀔 수 있으며, 이 경우 어댑터는 에러 대신 **빈 결과로 조용히 강등**됩니다.
 
 ---
 
