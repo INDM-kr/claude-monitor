@@ -30,12 +30,18 @@ const uTool = (id: string): string =>
   JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id }] } });
 const aTurn = (
   text: string,
-  opts: { stop_reason?: string; usage?: Record<string, number>; timestamp?: string } = {},
+  opts: { stop_reason?: string; usage?: Record<string, number>; timestamp?: string; id?: string } = {},
 ): string =>
   JSON.stringify({
     type: "assistant",
     timestamp: opts.timestamp,
-    message: { role: "assistant", content: [{ type: "text", text }], stop_reason: opts.stop_reason, usage: opts.usage },
+    message: {
+      role: "assistant",
+      id: opts.id,
+      content: [{ type: "text", text }],
+      stop_reason: opts.stop_reason,
+      usage: opts.usage,
+    },
   });
 
 describe("parser fold — user turns + waiting signal", () => {
@@ -82,6 +88,39 @@ describe("parser fold — user turns + waiting signal", () => {
     ].forEach((l) => (s = fold(s, l)));
     expect(s.turnTokens).toBe(30); // only since the last human turn
     expect(s.lastUserTurnTsMs).toBe(Date.parse("2026-06-16T01:00:00.000Z"));
+  });
+
+  it("token totals: repeated usage of one message id (per-content-block split) counts once", () => {
+    let s = initial();
+    [
+      uStr("요청"),
+      // one API message split into 3 records, all repeating the same usage
+      aTurn("thinking", { id: "msg_a", usage: { output_tokens: 100 } }),
+      aTurn("본문", { id: "msg_a", usage: { output_tokens: 100 } }),
+      aTurn("툴", { id: "msg_a", usage: { output_tokens: 100 } }),
+      // a distinct message adds on top
+      aTurn("다음", { id: "msg_b", usage: { output_tokens: 40 } }),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.totalTokens).toBe(140); // not 340
+    expect(s.turnTokens).toBe(140);
+  });
+
+  it("token totals: streaming growth of one message id lands as a delta (final value wins)", () => {
+    let s = initial();
+    [
+      uStr("요청"),
+      aTurn("스트리밍중", { id: "msg_a", usage: { output_tokens: 10 } }),
+      aTurn("스트리밍끝", { id: "msg_a", usage: { output_tokens: 250 } }),
+    ].forEach((l) => (s = fold(s, l)));
+    expect(s.totalTokens).toBe(250);
+  });
+
+  it("token totals: id-less usage records keep legacy per-record summing", () => {
+    let s = initial();
+    [uStr("요청"), aTurn("a", { usage: { output_tokens: 10 } }), aTurn("b", { usage: { output_tokens: 20 } })].forEach(
+      (l) => (s = fold(s, l)),
+    );
+    expect(s.totalTokens).toBe(30);
   });
 
   it("endedTurn signal: assistant end_turn last → ended; tool_result last → mid-tool", () => {

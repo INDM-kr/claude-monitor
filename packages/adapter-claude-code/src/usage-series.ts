@@ -44,10 +44,11 @@ export async function readTokenTimeline(source: string): Promise<UsagePoint[]> {
     return [];
   }
   const out: UsagePoint[] = [];
+  let lastId: string | null = null;
   for (const line of text.split("\n")) {
     const t = line.trim();
     if (!t) continue;
-    let obj: { type?: string; timestamp?: string; message?: { usage?: Record<string, unknown> } };
+    let obj: { type?: string; timestamp?: string; message?: { id?: string; usage?: Record<string, unknown> } };
     try {
       obj = JSON.parse(t);
     } catch {
@@ -56,7 +57,17 @@ export async function readTokenTimeline(source: string): Promise<UsagePoint[]> {
     if (obj.type !== "assistant" || !obj.message?.usage) continue;
     const ts = obj.timestamp ? Date.parse(obj.timestamp) : NaN;
     if (Number.isNaN(ts)) continue;
-    out.push({ ts, tokens: metricTokens(obj.message.usage) });
+    const point = { ts, tokens: metricTokens(obj.message.usage) };
+    // One assistant message is split into per-content-block records that repeat
+    // (or grow) the same usage — one point per message id, latest value wins,
+    // so downstream sums don't overcount (same defect as the fold() dedup).
+    const id = typeof obj.message.id === "string" && obj.message.id ? obj.message.id : null;
+    if (id != null && id === lastId && out.length > 0) {
+      out[out.length - 1] = point;
+    } else {
+      out.push(point);
+      lastId = id;
+    }
   }
   return out;
 }

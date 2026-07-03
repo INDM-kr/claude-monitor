@@ -40,6 +40,13 @@ export interface ParserState {
   lastUserTurnTsMs: number | null;
   /** tokens processed since the last human turn (reset on each human turn). */
   turnTokens: number;
+  /** API message id whose usage is currently included in the token totals.
+   *  Transcripts split one assistant message into per-content-block records
+   *  that each repeat (or grow, while streaming) the same `message.usage` —
+   *  repeats must replace their previous contribution, not sum again. */
+  lastUsageMsgId: string | null;
+  /** That message's current contribution to totalTokens/turnTokens. */
+  lastUsageTokens: number;
   /** type of the most recent record ("assistant"|"user"); drives endedTurn. */
   lastRecordType: "assistant" | "user" | null;
   /** byte offset of the next unread byte in the source file */
@@ -83,6 +90,8 @@ export function initial(): ParserState {
     userResponses: [],
     lastUserTurnTsMs: null,
     turnTokens: 0,
+    lastUsageMsgId: null,
+    lastUsageTokens: 0,
     lastRecordType: null,
     byteOffset: 0,
     cwd: null,
@@ -116,6 +125,8 @@ export interface ParsedLine {
   isMeta?: boolean;
   error?: unknown;
   message?: {
+    /** API message id (`msg_*`) — shared by all records of one assistant message. */
+    id?: string;
     model?: string;
     usage?: Record<string, unknown>;
     /** Human prompts are a STRING; tool_results/assistant blocks are an array. */
@@ -161,8 +172,21 @@ export function fold(state: ParserState, line: string): ParserState {
     if (msg.usage) {
       state.contextTokens = usageContextTokens(msg.usage);
       const mt = metricTokens(msg.usage);
-      state.totalTokens += mt;
-      state.turnTokens += mt; // reset to 0 on each new human turn (below)
+      const id = typeof msg.id === "string" && msg.id ? msg.id : null;
+      if (id != null && id === state.lastUsageMsgId) {
+        // Another record of the SAME assistant message (per-content-block
+        // split): replace the previous contribution instead of summing the
+        // repeated usage again (was a ~3.7x overcount). Streaming growth
+        // lands as a delta; a repeat after a turn reset contributes 0.
+        state.totalTokens += mt - state.lastUsageTokens;
+        state.turnTokens += mt - state.lastUsageTokens;
+        state.lastUsageTokens = mt;
+      } else {
+        state.totalTokens += mt;
+        state.turnTokens += mt; // reset to 0 on each new human turn (below)
+        state.lastUsageMsgId = id;
+        state.lastUsageTokens = mt;
+      }
     }
     if (typeof msg.stop_reason === "string") state.lastStopReason = msg.stop_reason;
   }
