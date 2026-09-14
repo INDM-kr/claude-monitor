@@ -58,3 +58,26 @@ describe("readTokenTimeline", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 });
+
+describe("cowork audit.jsonl (_audit_timestamp instead of timestamp)", () => {
+  const fixture = join(__dirname, "fixtures", "cowork", "cowork-simple.jsonl");
+  // Σ metricTokens after per-message dedup: msg_..001 (2+36935+28) + msg_..002 (2+3990+41).
+  // Identical to what fold() accumulates for the same file, so the project list header
+  // (fold totalTokens) and the project detail page (this timeline) agree for cowork.
+  const COWORK_METRIC_TOKENS = 36965 + 4033;
+
+  it("readTokenTimeline: cowork 레코드를 버리지 않는다 (상세페이지 토큰 0 버그)", async () => {
+    const points = await readTokenTimeline(fixture);
+    expect(points.length).toBe(2); // two distinct message ids, per-block repeats deduped
+    expect(points.reduce((a, p) => a + p.tokens, 0)).toBe(COWORK_METRIC_TOKENS);
+    expect(points.every((p) => Number.isFinite(p.ts))).toBe(true);
+    // start = a real date, not null → the detail header renders 시작 and the heatmap fills
+    expect(new Date(Math.min(...points.map((p) => p.ts))).toISOString().slice(0, 10)).toBe("2026-05-23");
+  });
+
+  it("readUsageSeries: cowork 컨텍스트 그래프도 비지 않는다", async () => {
+    const series = await readUsageSeries(fixture);
+    expect(series.length).toBeGreaterThan(0);
+    expect(series.every((p) => Number.isFinite(p.ts) && p.tokens > 0)).toBe(true);
+  });
+});

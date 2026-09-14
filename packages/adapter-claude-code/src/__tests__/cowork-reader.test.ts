@@ -62,7 +62,9 @@ describe("CoworkReader", () => {
     expect(s.agentStatus).toBeNull();
     expect(s.metrics).toBeNull();
     expect(s.model).toBe("claude-opus-4-7"); // display model has no [1m]
-    expect(s.totalTokens).toBeGreaterThan(0);
+    // Same Σ the project detail page's readTokenTimeline reports for this file —
+    // the list header and the detail page must not disagree for cowork.
+    expect(s.totalTokens).toBe(36965 + 4033);
     // startSec = first token-bearing assistant event (record 6's _audit_timestamp),
     // NOT the earlier pre-init user echo — matches the detail page's project-start basis.
     expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:21.374Z") / 1000));
