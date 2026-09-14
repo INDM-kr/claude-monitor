@@ -63,6 +63,9 @@ describe("CoworkReader", () => {
     expect(s.metrics).toBeNull();
     expect(s.model).toBe("claude-opus-4-7"); // display model has no [1m]
     expect(s.totalTokens).toBeGreaterThan(0);
+    // startSec = first token-bearing assistant event (record 6's _audit_timestamp),
+    // NOT the earlier pre-init user echo — matches the detail page's project-start basis.
+    expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:21.374Z") / 1000));
   });
 
   it("simple: a [1m] init model yields a 1M context window", async () => {

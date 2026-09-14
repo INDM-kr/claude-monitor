@@ -131,6 +131,7 @@ export class ClaudeCodeReader implements SessionReader {
       // Cumulative session tokens for every session (card + detail). Sub-agent trees
       // keep using `metrics.tokens` so the same value isn't shown twice.
       totalTokens: s.totalTokens,
+      startSec: s.firstTokenTsMs != null ? Math.floor(s.firstTokenTsMs / 1000) : null,
       updatedAt: now,
     };
     this.cached = summary;

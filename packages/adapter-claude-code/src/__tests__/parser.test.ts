@@ -339,8 +339,38 @@ describe("parser fold — lastActivityDetail (Feature D)", () => {
     expect(s.phase).toBe("Review");
     expect(s.lastStopReason).toBe("end_turn");
     expect(s.firstTsMs).toBe(Date.parse("2026-06-11T00:00:00.000Z"));
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:00.000Z")); // first token-bearing assistant
     expect(s.lastTsMs).toBe(Date.parse("2026-06-11T00:01:30.000Z"));
     expect(s.sawError).toBe(false);
+  });
+
+  it("firstTokenTsMs = first token-bearing assistant event, skipping earlier non-token records", () => {
+    let s = initial();
+    // 1) user prompt (timestamped, no usage) — sets firstTsMs but NOT firstTokenTsMs
+    s = fold(
+      s,
+      JSON.stringify({ type: "user", timestamp: "2026-06-10T23:59:50.000Z", message: { content: [{ type: "text", text: "hi" }] } }),
+    );
+    // 2) assistant with zero-token usage — still not a token event
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-10T23:59:55.000Z",
+        message: { usage: { input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 0 }, content: [{ type: "text", text: "" }] },
+      }),
+    );
+    // 3) first assistant with positive tokens — THIS is the project start (detail-page basis)
+    s = fold(
+      s,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T00:00:10.000Z",
+        message: { usage: { input_tokens: 5, cache_creation_input_tokens: 0, output_tokens: 15 }, content: [{ type: "text", text: "ok" }] },
+      }),
+    );
+    expect(s.firstTsMs).toBe(Date.parse("2026-06-10T23:59:50.000Z")); // first timestamped record (the prompt)
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:10.000Z")); // first positive-token event (a day later)
   });
 
   it("sawError on an api-error line; sawCancelled on interruption; metricTokens excludes cache_read", () => {

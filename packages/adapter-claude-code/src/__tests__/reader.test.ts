@@ -169,6 +169,8 @@ describe("ClaudeCodeReader incremental tail", () => {
     const sum = await new ClaudeCodeReader(childRef).readIncremental();
     expect(sum.agentStatus).toBe("done");
     expect(sum.metrics).toEqual({ tokens: 65, tools: 1, durationSec: 20 });
+    // startSec = first token-bearing assistant event (matches the detail page's basis).
+    expect(sum.startSec).toBe(Math.floor(Date.parse("2026-06-11T00:00:00.000Z") / 1000));
   });
 
   it("non-child session: agentStatus is null", async () => {

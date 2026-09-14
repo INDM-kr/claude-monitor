@@ -120,6 +120,7 @@ export class CoworkReader implements SessionReader {
       agentStatus: null,
       metrics: null,
       totalTokens: s.totalTokens,
+      startSec: s.firstTokenTsMs != null ? Math.floor(s.firstTokenTsMs / 1000) : null,
       updatedAt: now,
     };
     this.cached = summary;

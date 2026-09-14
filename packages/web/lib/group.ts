@@ -27,6 +27,44 @@ export function groupByProject(list: SessionSummary[]): ProjectGroupData[] {
   });
 }
 
+export interface ProjectAggregate {
+  /** Root (top-level) session count with this projectKey — matches the group's
+   *  session badge and the detail page's `sessionCount`. */
+  sessionCount: number;
+  /** Σ cumulative tokens over every session (root + children) sharing this
+   *  projectKey. Mirrors the detail page, which also attributes tokens by
+   *  projectKey — so a sub-agent that ran in a *different* cwd counts toward its
+   *  own project, not the one that launched it. Same value the detail total shows. */
+  totalTokens: number;
+  /** Earliest session start (epoch seconds) among this project's sessions — each
+   *  session's first token-bearing assistant event, the same basis the detail page
+   *  uses; null when none carries a start (e.g. a chat-only project group). */
+  startSec: number | null;
+}
+
+/**
+ * Aggregate every project's header stats in one pass over the *visible* sessions
+ * (scope 가 — "the currently-shown sessions"), keyed by projectKey. Attribution
+ * matches {@link getProjectActivity} (the detail page): each session — root OR
+ * sub-agent — counts toward its OWN projectKey, so the list header equals the
+ * detail total for an unfiltered project. `sessionCount` counts roots only.
+ */
+export function aggregateProjects(list: SessionSummary[]): Map<string, ProjectAggregate> {
+  const map = new Map<string, ProjectAggregate>();
+  for (const s of list) {
+    let a = map.get(s.ref.projectKey);
+    if (!a) {
+      a = { sessionCount: 0, totalTokens: 0, startSec: null };
+      map.set(s.ref.projectKey, a);
+    }
+    if (!s.ref.parentId) a.sessionCount += 1;
+    a.totalTokens += s.totalTokens ?? 0;
+    const st = s.startSec;
+    if (st != null && (a.startSec == null || st < a.startSec)) a.startSec = st;
+  }
+  return map;
+}
+
 export interface AgentGroup {
   /** Workflow run id (wf_*), or null for direct (non-workflow) sub-agents. */
   wfId: string | null;

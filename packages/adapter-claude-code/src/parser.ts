@@ -65,6 +65,11 @@ export interface ParserState {
   /** Number of tool_use calls. */
   toolCount: number;
   firstTsMs: number | null;
+  /** Timestamp (ms) of the first assistant message carrying positive token usage —
+   *  the "project start" as the detail page defines it (readTokenTimeline / project
+   *  activity count only token-bearing assistant events). Distinct from firstTsMs,
+   *  which is the first timestamped record of ANY type (usually the opening prompt). */
+  firstTokenTsMs: number | null;
   lastTsMs: number | null;
   /** stop_reason of the last assistant message ("end_turn" = finished cleanly). */
   lastStopReason: string | null;
@@ -104,6 +109,7 @@ export function initial(): ParserState {
     totalTokens: 0,
     toolCount: 0,
     firstTsMs: null,
+    firstTokenTsMs: null,
     lastTsMs: null,
     lastStopReason: null,
     sawError: false,
@@ -154,9 +160,11 @@ export function fold(state: ParserState, line: string): ParserState {
   if (typeof obj.entrypoint === "string") state.entrypoint = obj.entrypoint;
   if (typeof obj.permissionMode === "string") state.mode = obj.permissionMode;
 
+  let recTsMs: number | null = null;
   if (typeof obj.timestamp === "string") {
     const ms = Date.parse(obj.timestamp);
     if (Number.isFinite(ms)) {
+      recTsMs = ms;
       if (state.firstTsMs == null) state.firstTsMs = ms;
       state.lastTsMs = ms;
     }
@@ -172,6 +180,11 @@ export function fold(state: ParserState, line: string): ParserState {
     if (msg.usage) {
       state.contextTokens = usageContextTokens(msg.usage);
       const mt = metricTokens(msg.usage);
+      // Project start = first token-bearing assistant event (matches the detail
+      // page's readTokenTimeline gate: type assistant + usage + tokens > 0 + ts).
+      if (obj.type === "assistant" && mt > 0 && recTsMs != null && state.firstTokenTsMs == null) {
+        state.firstTokenTsMs = recTsMs;
+      }
       const id = typeof msg.id === "string" && msg.id ? msg.id : null;
       if (id != null && id === state.lastUsageMsgId) {
         // Another record of the SAME assistant message (per-content-block
