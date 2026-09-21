@@ -223,3 +223,93 @@ describe("foldCodex — tools", () => {
     expect(execScriptDetail("tools.sleep({ms:100})")).toBeNull();
   });
 });
+
+describe("foldCodex — caps, fallbacks, malformed inputs", () => {
+  it("caps userTurns at 100 keeping the first turn, and truncates a long turn to 200 chars", () => {
+    ord = 0;
+    const s = foldAll([meta(), ...Array.from({ length: 101 }, (_, i) => userMsg(`t${i}`))]);
+    expect(s.userTurns).toHaveLength(100);
+    expect(s.userResponses).toHaveLength(100);
+    expect(s.userTurns[0]).toBe("t0");
+    expect(s.userTurns[1]).toBe("t2"); // the 2nd turn is the one evicted
+    expect(s.userTurns[99]).toBe("t100");
+    foldCodex(s, userMsg("t101"));
+    expect(s.userTurns).toHaveLength(100);
+    expect(s.userTurns[1]).toBe("t3");
+    expect(s.userTurns[99]).toBe("t101");
+    foldCodex(s, userMsg("  " + "x".repeat(250) + "  "));
+    expect(s.userTurns[99]).toBe("x".repeat(200));
+  });
+
+  it("truncates lastText to 200 chars, ignores an empty reply, and tolerates a reply before any human turn", () => {
+    ord = 0;
+    const s = foldAll([meta(), assistantMsg("solo")]);
+    expect(s.lastText).toBe("solo");
+    expect(s.userResponses).toEqual([]);
+    foldAll([userMsg("q"), assistantMsg("y".repeat(300))], s);
+    expect(s.lastText).toBe("y".repeat(200));
+    expect(s.userResponses).toEqual(["y".repeat(200)]);
+    foldCodex(s, assistantMsg("   "));
+    expect(s.lastText).toBe("y".repeat(200));
+    expect(s.userResponses).toEqual(["y".repeat(200)]);
+  });
+
+  it("falls back to the line index as ordinal for records without one (sub-agent prefix skip)", () => {
+    const noOrd = (type: string, payload: Record<string, unknown>): string => JSON.stringify({ timestamp: "2026-09-21T11:14:22.358Z", type, payload });
+    const s = foldAll([
+      noOrd("session_meta", { id: THREAD, cwd: "/w", originator: "Codex Desktop", cli_version: "0.154.0", parent_thread_id: "p", subagent_history_start_ordinal: 2, source: { subagent: { thread_spawn: { parent_thread_id: "p" } } } }),
+      noOrd("response_item", { type: "message", role: "user", content: [{ type: "input_text", text: "parent turn" }] }),
+      noOrd("response_item", { type: "message", role: "user", content: [{ type: "input_text", text: "child turn" }] }),
+    ]);
+    expect(s.lineIndex).toBe(3);
+    expect(s.userTurns).toEqual(["child turn"]);
+  });
+
+  it("tool calls: malformed/object function_call arguments, non-exec custom tools, and nameless calls", () => {
+    ord = 0;
+    const s = foldAll([meta(), rec("response_item", { type: "function_call", name: "exec_command", arguments: "{not json", call_id: "c1" })]);
+    expect(s.toolCount).toBe(1);
+    expect(s.lastToolName).toBe("exec_command");
+    expect(s.lastActivityDetail).toBeNull();
+    foldCodex(s, rec("response_item", { type: "function_call", name: "exec_command", arguments: { cmd: "pwd" }, call_id: "c2" }));
+    expect(s.lastActivityDetail).toBe("pwd");
+    foldCodex(s, rec("response_item", { type: "function_call", arguments: "{}", call_id: "c3" }));
+    expect(s.toolCount).toBe(2);
+    expect(s.lastToolName).toBe("exec_command");
+    // custom_tool_call: a non-exec tool keeps its own name; exec without tools.<name>() stays exec
+    foldCodex(s, rec("response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "c4", input: "*** Begin Patch\n*** End Patch" }));
+    expect(s.lastToolName).toBe("apply_patch");
+    expect(s.lastActivityDetail).toBeNull();
+    expect(s.toolCount).toBe(3);
+    foldCodex(s, rec("response_item", { type: "custom_tool_call", name: "exec", call_id: "c5", input: "await sleep(10)" }));
+    expect(s.lastToolName).toBe("exec");
+    expect(s.lastActivityDetail).toBeNull();
+    foldCodex(s, rec("response_item", { type: "custom_tool_call", call_id: "c6", input: "x" }));
+    expect(s.toolCount).toBe(4);
+  });
+
+  it("token_count with only last_token_usage updates context but not totals; a later event without last keeps the context", () => {
+    ord = 0;
+    const s = foldAll([meta(), rec("event_msg", { type: "token_count", info: { last_token_usage: usage(1000, 0, 50, 5), model_context_window: 100 }, rate_limits: null })]);
+    expect(s.contextTokens).toBe(1045);
+    expect(s.contextLimit).toBe(100);
+    expect(s.tokenEvents).toBe(0);
+    expect(s.totalTokens).toBe(0);
+    expect(s.firstTokenTsMs).toBeNull();
+    foldCodex(s, rec("event_msg", { type: "token_count", info: { total_token_usage: usage(1000, 0, 50, 5) }, rate_limits: null }));
+    expect(s.contextTokens).toBe(1045);
+    expect(s.tokenEvents).toBe(1);
+    expect(s.totalTokens).toBe(1050);
+  });
+
+  it("a first session_meta without cwd is ignored, later records still fold, and a later valid meta is accepted", () => {
+    ord = 0;
+    const s = foldAll([rec("session_meta", { id: THREAD, originator: "codex_exec" }), userMsg("hi")]);
+    expect(s.meta).toBeNull();
+    expect(s.cwd).toBeNull();
+    expect(s.userTurns).toEqual(["hi"]);
+    foldCodex(s, meta());
+    expect(s.cwd).toBe("/Users/alice/projects/demo");
+    expect(s.version).toBe("0.154.0");
+  });
+});

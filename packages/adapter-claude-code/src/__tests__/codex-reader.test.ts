@@ -180,3 +180,82 @@ describe("CodexReader", () => {
     expect(s.userTurns).toEqual(["테스트 돌려줘"]);
   });
 });
+
+describe("CodexReader — timestamp fallback, status(), failed pass, child lifecycle", () => {
+  let dir: string;
+  let file: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), "cm-codex-reader2-"));
+    file = join(dir, `rollout-2026-09-21T20-14-22-${PARENT}.jsonl`);
+  });
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("records without timestamps (and an empty file) fall back to the file mtime; turn/start seconds stay null", async () => {
+    const noTs = [
+      { ordinal: 0, type: "session_meta", payload: { id: PARENT, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" } },
+      { ordinal: 1, type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "no clock" }] } },
+      { ordinal: 2, type: "event_msg", payload: { type: "token_count", info: { total_token_usage: { input_tokens: 1000, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 100, reasoning_output_tokens: 0, total_tokens: 1100 } }, rate_limits: null } },
+    ];
+    await fs.writeFile(file, noTs.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    const mtime = Math.floor((await fs.stat(file)).mtimeMs / 1000);
+    const s = await new CodexReader(refFor(file)).readIncremental();
+    expect(s.ref.mtime).toBe(mtime);
+    expect(s.userTurns).toEqual(["no clock"]);
+    expect(s.turnStartSec).toBeNull();
+    expect(s.startSec).toBeNull();
+    expect(s.totalTokens).toBe(1100);
+    expect(s.turnTokens).toBe(1100);
+    expect(s.status).toBe("live"); // file was just written
+
+    const empty = join(dir, `rollout-2026-09-21T20-15-00-${CHILD}.jsonl`);
+    await fs.writeFile(empty, "");
+    const e = await new CodexReader(refFor(empty, CHILD)).readIncremental();
+    expect(e.ref.mtime).toBe(Math.floor((await fs.stat(empty)).mtimeMs / 1000));
+    expect(e.userTurns).toEqual([]);
+    expect(e.firstPrompt).toBeNull();
+    expect(e.turnTokens).toBeNull();
+    expect(e.totalTokens).toBe(0);
+    expect(e.context).toBeNull();
+    expect(e.lastTool).toBeNull();
+    expect(e.todo).toBeNull();
+    expect(e.runner).toBe("codex");
+  });
+
+  it("status(): ref mtime before the first read, last-record activity after, ref mtime again after close()", async () => {
+    await fs.writeFile(file, inflightTranscript(10));
+    const now = Math.floor(Date.now() / 1000);
+    const ref = { ...refFor(file), mtime: now - 5000 };
+    const r = new CodexReader(ref);
+    expect(r.status(now)).toBe("stop");
+    await r.readIncremental();
+    expect(r.status(now)).toBe("live");
+    r.close();
+    expect(r.status(now)).toBe("stop");
+  });
+
+  it("a pass that fails (file missing) rejects without blocking the next pass", async () => {
+    const r = new CodexReader(refFor(file));
+    await expect(r.readIncremental()).rejects.toThrow();
+    await fs.writeFile(file, inflightTranscript(5));
+    const s = await r.readIncremental();
+    expect(s.userTurns).toEqual(["테스트 돌려줘"]);
+  });
+
+  it("child lifecycle: running while an unfinished turn is recent, done once it goes stale", async () => {
+    const childFile = join(dir, `rollout-2026-09-21T20-20-00-${CHILD}.jsonl`);
+    await fs.writeFile(childFile, inflightTranscript(10));
+    const live = await new CodexReader(refFor(childFile, CHILD, PARENT)).readIncremental();
+    expect(live.agentStatus).toBe("running");
+    expect(live.status).toBe("live");
+    expect(live.metrics).toEqual({ tokens: 0, tools: 1, durationSec: 3 });
+    expect(live.endedTurn).toBe(false);
+
+    await fs.writeFile(childFile, inflightTranscript(700));
+    const stale = await new CodexReader(refFor(childFile, CHILD, PARENT)).readIncremental();
+    expect(stale.agentStatus).toBe("done");
+    expect(stale.status).toBe("stop");
+  });
+});
