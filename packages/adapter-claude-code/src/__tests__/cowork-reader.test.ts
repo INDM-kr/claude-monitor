@@ -65,9 +65,10 @@ describe("CoworkReader", () => {
     // Same Σ the project detail page's readTokenTimeline reports for this file —
     // the list header and the detail page must not disagree for cowork.
     expect(s.totalTokens).toBe(36965 + 4033);
-    // startSec = first token-bearing assistant event (record 6's _audit_timestamp),
-    // NOT the earlier pre-init user echo — matches the detail page's project-start basis.
-    expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:21.374Z") / 1000));
+    // startSec = the first reply, stamped at its last content block (record 8) — the
+    // same stamp the detail page's token timeline gives that message; not the
+    // pre-init user echo, and not the reply's first block (record 6, 18:02:21).
+    expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:33.982Z") / 1000));
   });
 
   it("concurrent readIncremental calls fold each record once (== a sequential read)", async () => {
@@ -144,7 +145,7 @@ describe("CoworkReader", () => {
 
     await fs.appendFile(file, all.slice(5).join("\n") + "\n");
     const fin = await reader.readIncremental();
-    expect(fin.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:21.374Z") / 1000));
+    expect(fin.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:33.982Z") / 1000)); // reply's last block
   });
 
   it("a failed pass (file briefly missing) still rejects, and does not block later reads", async () => {

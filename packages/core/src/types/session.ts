@@ -116,9 +116,9 @@ export interface SessionSummary {
    *  Optional — shown on the card/detail, not in the sub-agent tree (metrics covers
    *  children there). */
   totalTokens?: number | null;
-  /** epoch seconds of the session's first token-bearing assistant event — the
-   *  "start" as the detail page defines it (project activity counts only token
-   *  events), so the list-header start date matches the detail page. Optional —
+  /** epoch seconds of the session's first token-bearing assistant message, stamped
+   *  as the detail page's token timeline stamps it (at the message's last content
+   *  block), so the list-header start date matches the detail page. Optional —
    *  chat list-only entries (no timestamped body) and older summaries omit it. */
   startSec?: number | null;
   /** epoch seconds when this summary was computed */

@@ -122,6 +122,30 @@ describe("cowork audit.jsonl (_audit_timestamp instead of timestamp)", () => {
 });
 
 describe("목록 헤더 ↔ 상세 페이지 토큰 합계 일치 (같은 파일: fold vs readTokenTimeline)", () => {
+  it("시작 시각: 자정을 넘는 분할 응답도 목록(fold)과 상세(timeline)가 같은 순간 (마지막 블록)", async () => {
+    const a = (ts: string, id: string, out: number): string =>
+      JSON.stringify({ type: "assistant", timestamp: ts, message: { id, usage: { output_tokens: out }, content: [{ type: "text", text: "." }] } });
+    const lines = [
+      JSON.stringify({ type: "user", timestamp: "2026-06-10T23:59:50.000Z", message: { content: "요청" } }),
+      a("2026-06-10T23:59:55.000Z", "msg_a", 10), // first block, before midnight
+      a("2026-06-11T00:00:05.000Z", "msg_a", 10), // same message, after midnight
+      a("2026-06-11T00:00:09.000Z", "msg_b", 5),
+      a("2026-06-11T00:01:00.000Z", "msg_a", 10), // id seen again later → a new point; start stays
+    ];
+    const dir = await fs.mkdtemp(join(tmpdir(), "cm-usage-"));
+    const file = join(dir, "t.jsonl");
+    await fs.writeFile(file, lines.join("\n") + "\n");
+
+    let s = initial();
+    for (const l of lines) s = fold(s, l);
+    const detailStart = Math.min(...(await readTokenTimeline(file)).filter((p) => p.tokens > 0).map((p) => p.ts));
+
+    // Same epoch in both paths ⇒ the same rendered date in any timezone.
+    expect(s.firstTokenTsMs).toBe(detailStart);
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:05.000Z"));
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
   it("Claude Code transcript: Σ readTokenTimeline == fold().totalTokens (블록 분할 · 스트리밍 증가 · id 없음 · 0 usage)", async () => {
     const a = (ts: string, id: string | undefined, usage: Record<string, number>): string =>
       JSON.stringify({ type: "assistant", timestamp: ts, message: { id, usage, content: [{ type: "text", text: "." }] } });
@@ -141,10 +165,14 @@ describe("목록 헤더 ↔ 상세 페이지 토큰 합계 일치 (같은 파일
 
     let s = initial();
     for (const l of lines) s = fold(s, l);
-    const timelineSum = (await readTokenTimeline(file)).reduce((acc, p) => acc + p.tokens, 0);
+    const timeline = await readTokenTimeline(file);
+    const timelineSum = timeline.reduce((acc, p) => acc + p.tokens, 0);
 
     expect(s.totalTokens).toBe(120 + 95 + 7); // cache_read excluded
     expect(timelineSum).toBe(s.totalTokens); // list header (fold) == detail total (timeline)
+    // …and the start: msg_a is stamped at its last block (00:00:03) in both paths.
+    expect(s.firstTokenTsMs).toBe(Math.min(...timeline.filter((p) => p.tokens > 0).map((p) => p.ts)));
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:03.000Z"));
     await fs.rm(dir, { recursive: true, force: true });
   });
 });
