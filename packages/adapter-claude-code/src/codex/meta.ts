@@ -1,4 +1,4 @@
-import { basename } from "node:path";
+import { basename, isAbsolute } from "node:path";
 import type { RunnerKind } from "@claude-monitor/core";
 
 /**
@@ -42,7 +42,10 @@ export function parseCodexMeta(line: string): CodexMeta | null {
   if (obj?.type !== "session_meta" || obj.payload == null || typeof obj.payload !== "object") return null;
   const p = obj.payload;
   if (typeof p.id !== "string" || !p.id) return null;
-  if (typeof p.cwd !== "string" || !p.cwd) return null;
+  // `cwd` flows into `git` spawns and project grouping downstream — only an
+  // absolute path is a workspace; a relative one would resolve against the
+  // monitor's own cwd.
+  if (typeof p.cwd !== "string" || !isAbsolute(p.cwd)) return null;
 
   let kind: CodexThreadKind = "user";
   let agentNickname: string | null = null;
@@ -79,9 +82,12 @@ export function runnerFromOriginator(originator: string | null | undefined): Run
   return originator != null && DESKTOP_ORIGINATORS.has(originator) ? "codex-desktop" : "codex";
 }
 
-const ROLLOUT_FILE_RE = /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/i;
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+/** `rollout-<local ts>-<thread uuid>[_<window uuid>].jsonl` — the id is the
+ *  UUID-shaped tail (ids go into URLs unencoded, so the shape is enforced here). */
+const ROLLOUT_FILE_RE = new RegExp(`^rollout-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-(${UUID}(?:_${UUID})?)\\.jsonl$`, "i");
 
-/** Session id from a rollout file name: everything after `rollout-<ts>-`,
+/** Session id from a rollout file name: the UUID part after `rollout-<ts>-`,
  *  so a post-compaction continuation (`<thread>_<window>.jsonl`) stays distinct. */
 export function codexSessionIdFromPath(filePath: string): string | null {
   const m = basename(filePath).match(ROLLOUT_FILE_RE);

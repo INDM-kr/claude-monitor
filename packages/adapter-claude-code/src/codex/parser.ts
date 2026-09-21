@@ -121,7 +121,15 @@ interface RawRecord {
  * loop treats that as a partial write and rolls back to the line start).
  */
 export function foldCodex(state: CodexState, line: string): CodexState {
-  const obj = JSON.parse(line) as RawRecord;
+  const obj = JSON.parse(line) as RawRecord | null;
+  // A complete line that is valid JSON but not an object (`null`, a number, a
+  // string) is a corrupt record, not a partial write. Skip it: throwing here
+  // would make the tail loop roll back to this line on every pass and freeze
+  // the reader at it forever while the file keeps growing.
+  if (obj == null || typeof obj !== "object") {
+    state.lineIndex++;
+    return state;
+  }
   const ordinal = typeof obj.ordinal === "number" ? obj.ordinal : state.lineIndex;
   state.lineIndex++;
   const p = (obj.payload != null && typeof obj.payload === "object" ? obj.payload : {}) as Record<string, unknown>;
@@ -210,7 +218,7 @@ function foldTokenCount(state: CodexState, info: unknown, tsMs: number): void {
   // limit refreshes), so summing last_token_usage would overcount. A drop in
   // total_tokens means a fresh cumulative (e.g. after a window switch).
   const m = metricOf(cum);
-  const reset = state.lastCum != null && cum.total < state.lastCum.total;
+  const reset = state.lastCum != null && cumulativeDecreased(cum, state.lastCum);
   const delta = state.lastCum == null || reset ? m : Math.max(0, m - metricOf(state.lastCum));
   state.lastCum = cum;
   if (delta > 0) {
@@ -220,10 +228,22 @@ function foldTokenCount(state: CodexState, info: unknown, tsMs: number): void {
   }
 }
 
+/** Any cumulative component going backwards means a fresh cumulative (new
+ *  context window / thread), not a delta — checked per component, since a new
+ *  cumulative's first total can already exceed the old one. */
+function cumulativeDecreased(cur: CodexUsage, prev: CodexUsage): boolean {
+  return cur.total < prev.total || cur.input < prev.input || cur.cached < prev.cached || cur.output < prev.output;
+}
+
 export function usageOf(u: unknown): CodexUsage | null {
   if (u == null || typeof u !== "object") return null;
   const r = u as Record<string, unknown>;
-  const n = (k: string): number => (typeof r[k] === "number" ? (r[k] as number) : 0);
+  // Token counts are non-negative finite integers; anything else (negative,
+  // NaN, Infinity, non-number) is a corrupt field and counts as 0.
+  const n = (k: string): number => {
+    const v = r[k];
+    return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
+  };
   return {
     input: n("input_tokens"),
     cached: n("cached_input_tokens"),

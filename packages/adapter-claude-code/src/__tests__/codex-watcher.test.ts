@@ -208,3 +208,67 @@ describe("watcher helpers — readFirstLine limits, isIgnoredCodexPath outside/n
     expect(isIgnoredCodexPath("/Users/a/.codex/sessions", "/Users/a/.codex/sessions/2026/.tmp/rollout-x.jsonl")).toBe(true);
   });
 });
+
+describe("CodexWatcher — review fixes: depth guard, cached identity, no initial re-emission", () => {
+  let root: string;
+  let day: string;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(join(tmpdir(), "cm-codex-watch3-"));
+    day = join(root, "2026", "09", "21");
+    await fs.mkdir(day, { recursive: true });
+    await fs.writeFile(join(day, `rollout-2026-09-21T20-14-22-${PARENT}.jsonl`), userMeta);
+  });
+  afterEach(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it("existing files are yielded by scan only — chokidar does not re-emit them as `added` at startup", async () => {
+    const w = new CodexWatcher({ codexDir: root });
+    const events: string[] = [];
+    w.on("event", (e) => events.push(e.kind === "removed" ? `removed:${e.refId}` : `${e.kind}:${e.ref.id}`));
+    await sleep(300); // let fsevents settle after beforeEach wrote the file
+    await w.start();
+    const scanned: SessionRef[] = [];
+    for await (const r of w.scan()) scanned.push(r);
+    await sleep(600);
+    await w.stop();
+    expect(scanned.map((r) => r.id)).toEqual([PARENT]);
+    // A late fsevents notification for the just-written file may still surface as
+    // `changed`; what must not happen is a second `added` for a scanned file.
+    expect(events.filter((e) => e.startsWith("added:"))).toEqual([]);
+  });
+
+  it("a rollout-named file at the wrong depth is ignored by the watcher", async () => {
+    const w = new CodexWatcher({ codexDir: root });
+    const events: string[] = [];
+    w.on("event", (e) => events.push(e.kind === "removed" ? `removed:${e.refId}` : `${e.kind}:${e.ref.id}`));
+    await w.start();
+    await sleep(300);
+    const STRAY = "01a0c3c4-0000-7000-8000-000000000007";
+    await fs.writeFile(join(root, "2026", "09", `rollout-2026-09-21T20-14-22-${STRAY}.jsonl`), metaLine({ id: STRAY, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }));
+    await sleep(600);
+    await w.stop();
+    expect(events.filter((e) => e.includes(STRAY))).toEqual([]);
+  });
+
+  it("identity is parsed from the first line once: a change event after the first line was cached still emits the same ref", async () => {
+    const w = new CodexWatcher({ codexDir: root });
+    const events: Array<{ kind: string; id: string; workspace: string }> = [];
+    w.on("event", (e) => {
+      if (e.kind !== "removed") events.push({ kind: e.kind, id: e.ref.id, workspace: e.ref.workspace });
+    });
+    await w.start();
+    await sleep(300);
+    const NEW = "01a0c3c5-0000-7000-8000-000000000008";
+    const f = join(day, `rollout-2026-09-21T20-14-22-${NEW}.jsonl`);
+    await fs.writeFile(f, metaLine({ id: NEW, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }));
+    await sleep(500);
+    await fs.appendFile(f, JSON.stringify({ timestamp: "2026-09-21T11:14:23.000Z", ordinal: 1, type: "event_msg", payload: { type: "task_started" } }) + "\n");
+    await sleep(500);
+    await w.stop();
+    const mine = events.filter((e) => e.id === NEW);
+    expect(mine.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(mine.map((e) => e.workspace))).toEqual(new Set(["/Users/alice/projects/demo"]));
+  });
+});

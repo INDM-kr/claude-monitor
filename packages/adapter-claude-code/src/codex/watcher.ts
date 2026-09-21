@@ -6,7 +6,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import type { AdapterEvent, SessionRef } from "@claude-monitor/core";
 import { projectIdentityFromCwd, shortenWorkspace } from "@claude-monitor/core";
 import { CODEX_ADAPTER_ID } from "./constants.js";
-import { codexSessionIdFromPath, parseCodexMeta } from "./meta.js";
+import { codexSessionIdFromPath, parseCodexMeta, type CodexMeta } from "./meta.js";
 
 export interface CodexWatcherOptions {
   /** Absolute path to the Codex rollout root (`~/.codex/sessions`). */
@@ -15,6 +15,8 @@ export interface CodexWatcherOptions {
 
 const LF = 0x0a;
 const CHUNK = 64 * 1024;
+/** `<codexDir>/YYYY/MM/DD/rollout-*.jsonl` — segments below the root. */
+const ROLLOUT_DEPTH = 4;
 /** The first line holds `base_instructions` (the whole system prompt) — tens
  *  of KB is normal; anything past this is not a rollout file. */
 const FIRST_LINE_MAX = 8 * 1024 * 1024;
@@ -75,6 +77,11 @@ async function statOrNull(p: string): Promise<Stats | null> {
 export class CodexWatcher extends EventEmitter {
   private watcher: FSWatcher | null = null;
   private readonly codexDir: string;
+  /** First-line identity per file. The first line never changes once written,
+   *  so it is parsed once (Codex appends many records per turn; re-reading a
+   *  multi-KB first line on every change is wasted I/O). `null` remembers a
+   *  hidden thread. Not-yet-complete first lines are not cached. */
+  private readonly metaByPath = new Map<string, CodexMeta | null>();
 
   constructor(opts: CodexWatcherOptions) {
     super();
@@ -85,7 +92,7 @@ export class CodexWatcher extends EventEmitter {
     this.watcher = chokidar.watch(this.codexDir, {
       depth: 3, // YYYY → MM → DD → rollout-*.jsonl
       persistent: true,
-      ignoreInitial: false,
+      ignoreInitial: true, // scan() yields existing files; a second `add` per file would double the startup fan-out
       awaitWriteFinish: false,
       ignored: (p) => isIgnoredCodexPath(this.codexDir, p),
     });
@@ -101,6 +108,16 @@ export class CodexWatcher extends EventEmitter {
       await this.watcher.close();
       this.watcher = null;
     }
+    this.metaByPath.clear();
+  }
+
+  /** A rollout file at exactly `YYYY/MM/DD/rollout-*.jsonl` below the root
+   *  (the same shape scan() walks — chokidar's depth bound alone would also
+   *  accept a rollout-named file one or two levels up). */
+  private isRolloutPath(p: string): boolean {
+    const rel = relative(this.codexDir, p);
+    if (!rel || rel.startsWith("..")) return false;
+    return rel.split(sep).length === ROLLOUT_DEPTH && codexSessionIdFromPath(p) != null;
   }
 
   emitEvent(event: AdapterEvent): void {
@@ -136,12 +153,14 @@ export class CodexWatcher extends EventEmitter {
   }
 
   private async handle(path: string, kind: "added" | "changed"): Promise<void> {
-    if (!codexSessionIdFromPath(path)) return;
+    if (!this.isRolloutPath(path)) return;
     const ref = await this.refFromPath(path);
     if (ref) this.emitEvent({ kind, ref });
   }
 
   private handleUnlink(path: string): void {
+    if (!this.isRolloutPath(path)) return;
+    this.metaByPath.delete(path);
     const id = codexSessionIdFromPath(path);
     if (id) this.emitEvent({ kind: "removed", refId: id });
   }
@@ -151,10 +170,15 @@ export class CodexWatcher extends EventEmitter {
     if (!id) return null;
     const st = await statOrNull(filePath);
     if (!st || !st.isFile()) return null;
-    const first = await readFirstLine(filePath).catch(() => null);
-    if (first == null) return null;
-    const meta = parseCodexMeta(first);
-    if (!meta || meta.kind === "hidden") return null;
+    let meta = this.metaByPath.get(filePath);
+    if (meta === undefined) {
+      const first = await readFirstLine(filePath).catch(() => null);
+      if (first == null) return null; // first line not complete yet — retry on the next event
+      const parsed = parseCodexMeta(first);
+      meta = parsed != null && parsed.kind !== "hidden" ? parsed : null;
+      this.metaByPath.set(filePath, meta);
+    }
+    if (meta == null) return null;
     const identity = projectIdentityFromCwd(meta.cwd);
     const ref: SessionRef = {
       id,

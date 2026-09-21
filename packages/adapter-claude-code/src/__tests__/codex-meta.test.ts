@@ -91,3 +91,18 @@ describe("constants", () => {
     expect(defaultCodexDir().endsWith("/.codex/sessions")).toBe(true);
   });
 });
+
+describe("review fixes — cwd must be absolute, ids must be UUID-shaped", () => {
+  it("rejects a relative cwd (it would resolve against the monitor's own cwd downstream)", () => {
+    expect(parseCodexMeta(metaLine({ id: PARENT, cwd: ".", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }))).toBeNull();
+    expect(parseCodexMeta(metaLine({ id: PARENT, cwd: "projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }))).toBeNull();
+    expect(parseCodexMeta(metaLine({ id: PARENT, cwd: "/", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }))?.cwd).toBe("/");
+  });
+
+  it("only accepts UUID (or UUID_UUID) ids after the timestamp", () => {
+    expect(codexSessionIdFromPath("/r/2026/09/21/rollout-2026-09-21T20-14-22-not-a-uuid.jsonl")).toBeNull();
+    expect(codexSessionIdFromPath("/r/2026/09/21/rollout-2026-09-21T20-14-22-a?b#c.jsonl")).toBeNull();
+    expect(codexSessionIdFromPath(`/r/2026/09/21/rollout-2026-09-21T20-14-22-${PARENT}_x.jsonl`)).toBeNull();
+    expect(codexSessionIdFromPath(`/r/2026/09/21/ROLLOUT-2026-09-21T20-14-22-${PARENT.toUpperCase()}.JSONL`)).toBe(PARENT.toUpperCase());
+  });
+});

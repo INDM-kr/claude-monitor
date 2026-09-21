@@ -313,3 +313,25 @@ describe("foldCodex — caps, fallbacks, malformed inputs", () => {
     expect(s.version).toBe("0.154.0");
   });
 });
+
+describe("foldCodex — review fixes: non-object lines, corrupt token fields, component-wise reset", () => {
+  it("a complete line that is valid JSON but not an object is skipped (not thrown) so the tail loop never freezes on it", () => {
+    ord = 0;
+    const s = foldAll([meta(), "null", "42", '"text"', userMsg("after the corrupt lines")]);
+    expect(s.userTurns).toEqual(["after the corrupt lines"]);
+    expect(s.lineIndex).toBe(5);
+  });
+
+  it("negative, NaN or non-number token fields count as 0", () => {
+    const u = usageOf({ input_tokens: -5, cached_input_tokens: "x", output_tokens: Number.NaN, total_tokens: Infinity })!;
+    expect(u).toEqual({ input: 0, cached: 0, cacheWrite: 0, output: 0, reasoning: 0, total: 0 });
+  });
+
+  it("a fresh cumulative whose total already exceeds the old one is still detected as a reset when a component went backwards", () => {
+    ord = 0;
+    // old cumulative: input 50000 (cached 40000) + output 1000 → metric 11000, total 51000
+    // new thread: input 60000 (cached 0) + output 100 → total 60100 > 51000 but cached dropped → reset
+    const s = foldAll([meta(), tokenCount(usage(50000, 40000, 1000)), tokenCount(usage(60000, 0, 100))]);
+    expect(s.totalTokens).toBe(11000 + 60100);
+  });
+});

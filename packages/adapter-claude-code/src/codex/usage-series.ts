@@ -6,9 +6,11 @@ const MAX_POINTS = 500;
 
 /**
  * Walk a rollout file with the same fold the reader uses, invoking `onToken`
- * once per folded token_count event (so a sub-agent's copied parent prefix and
- * malformed lines are excluded exactly as the reader excludes them, and the
- * timeline's Σ equals the summary's totalTokens).
+ * once per folded token_count event, so a sub-agent's copied parent prefix is
+ * excluded exactly as the reader excludes it and the timeline's Σ equals the
+ * summary's totalTokens. One difference: a malformed (unparseable) line is
+ * skipped here, whereas the reader stops at it and retries on the next pass
+ * (see tailLines) — the two only diverge on a corrupt file.
  */
 async function walkTokenEvents(
   source: string,
