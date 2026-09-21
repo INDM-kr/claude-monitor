@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-21-codex-adapter-design.md`
 
+## 실행 기록 (2026-09-21)
+
+- 실행 순서 T6 → T1 → T2 → T3 → T4 → T5 → T7 → T8 → T9. Task 4와 5는 index.ts가 usage-series를 함께 export하므로 **한 커밋**(80ddf30)으로 묶음.
+- Task 9 실기: 빌드 산출물로 `next start -p 11399` → Codex 루트 23·하위 33, guardian 0, `baro-system`·`claude-monitor`가 Claude Code 세션과 같은 그룹, 상세 페이지 200.
+- 발견: Codex 하위 에이전트의 과제는 `agent_message`(NEW_TASK)로 오지만 Payload가 비어 있어 firstPrompt 추출 불가 — 하위 행 UI는 lastActivityDetail/lastText를 쓰므로 표시엔 영향 없음.
+
 ## Global Constraints
 
 - 하드코딩 금지: 기본 경로·어댑터 id·표시명은 `codex/constants.ts`에만 둔다. env 이름은 `CM_ENABLE_CODEX`, `CM_CODEX_DIR`.
@@ -1498,20 +1504,15 @@ describe("CodexWatcher", () => {
 
   it("CodexAdapter.discover yields the scan and open returns a reader", async () => {
     const a = new CodexAdapter({ codexDir: root });
-    const ids: string[] = [];
-    for await (const r of a.discover()) ids.push(r.id);
-    expect(ids.sort()).toEqual([PARENT, CHILD].sort());
+    const refs: SessionRef[] = [];
+    for await (const r of a.discover()) refs.push(r); // discover() once — a second call would start a second watcher
+    expect(refs.map((r) => r.id).sort()).toEqual([PARENT, CHILD].sort());
     expect(a.id).toBe("codex");
-    const reader = a.open((await firstRef(a)) as SessionRef);
+    const reader = a.open(refs[0]!);
     expect(typeof reader.readIncremental).toBe("function");
     await a.dispose();
   });
 });
-
-async function firstRef(a: CodexAdapter): Promise<SessionRef | undefined> {
-  for await (const r of a.discover()) return r;
-  return undefined;
-}
 
 describe("readFirstLine", () => {
   it("returns the first line without its newline, null when no newline yet", async () => {
@@ -1854,7 +1855,8 @@ describe("readCodexTokenTimeline", () => {
     ]);
     const s = await new CodexReader({ id: "x", adapterId: CODEX_ADAPTER_ID, workspace: "/w", workspaceShort: "w", projectKey: "/w", projectLabel: "w", owner: "o", source: src, mtime: 0 }).readIncremental();
     expect(points.reduce((a, p) => a + p.tokens, 0)).toBe(s.totalTokens);
-    expect(points.find((p) => p.tokens > 0)!.ts).toBe((s.startSec ?? 0) * 1000);
+    // startSec is floored to seconds; the first positive point is the same instant
+    expect(Math.floor(points.find((p) => p.tokens > 0)!.ts / 1000)).toBe(s.startSec);
   });
 
   it("excludes the parent's copied prefix in a sub-agent file", async () => {
@@ -2159,7 +2161,7 @@ export function tokenTimelineFor(ref: SeriesRef): Promise<UsagePoint[]> {
 ```ts
   // One read per transcript file (roots + sub-agents may share none, but a
   // session's ref is what picks the adapter-specific reader).
-  const byPath = new Map<string, (typeof sessions)[number]["ref"]>();
+  const byPath = new Map<string, SessionRef>(); // import type { SessionRef } from "@claude-monitor/core"
   for (const s of sessions) if (!byPath.has(s.ref.source)) byPath.set(s.ref.source, s.ref);
 ```
 
