@@ -16,6 +16,11 @@ describe("fmtCount", () => {
     expect(fmtCount(999_499)).toBe("999k");
   });
 
+  it("999.5k 이상은 1000k가 아니라 1.0M으로 올림", () => {
+    expect(fmtCount(999_500)).toBe("1.0M");
+    expect(fmtCount(999_999)).toBe("1.0M");
+  });
+
   it("백만 이상은 소수 1자리 M", () => {
     expect(fmtCount(1_000_000)).toBe("1.0M");
     expect(fmtCount(82_600_000)).toBe("82.6M");

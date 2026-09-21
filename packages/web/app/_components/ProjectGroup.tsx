@@ -36,9 +36,11 @@ export function ProjectGroup({
             {sessions.length}
           </span>
           {/* Inline (single-line) so the project bar height stays constant — SessionCard's
-              open-state sticky offset (top: header + 29px) is calibrated to it. */}
+              open-state sticky offset (top: header + 29px) is calibrated to it. Hidden
+              below sm so a narrow screen keeps the room for the project name (the same
+              numbers are on the detail page). */}
           {showMeta && (
-            <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-zinc-600">
+            <span className="hidden shrink-0 whitespace-nowrap text-[11px] tabular-nums text-zinc-400 sm:inline">
               {startSec != null && (
                 <>
                   {t("project.since")} {fmtDate(startSec)}
