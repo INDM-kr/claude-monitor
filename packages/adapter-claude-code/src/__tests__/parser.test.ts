@@ -373,6 +373,28 @@ describe("parser fold — lastActivityDetail (Feature D)", () => {
     expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:10.000Z")); // first positive-token event (a day later)
   });
 
+  it("firstTokenTsMs ignores a NON-assistant record carrying positive usage (detail timeline reads assistant only)", () => {
+    let s = initial();
+    s = fold(
+      s,
+      JSON.stringify({ type: "user", timestamp: "2026-06-11T00:00:01.000Z", message: { usage: { output_tokens: 50 }, content: [] } }),
+    );
+    expect(s.firstTokenTsMs).toBeNull();
+    s = fold(s, aTurn("ok", { id: "msg_1", usage: { output_tokens: 10 }, timestamp: "2026-06-11T00:00:09.000Z" }));
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:09.000Z"));
+  });
+
+  it("firstTokenTsMs uses the record's OWN timestamp — an untimestamped/unparseable token event doesn't borrow lastTsMs", () => {
+    let s = initial();
+    s = fold(s, uStr("요청", { timestamp: "2026-06-11T00:00:00.000Z" })); // sets lastTsMs
+    s = fold(s, aTurn("a", { id: "msg_1", usage: { output_tokens: 10 } })); // no timestamp
+    expect(s.firstTokenTsMs).toBeNull(); // not the prompt's time
+    s = fold(s, aTurn("b", { id: "msg_2", usage: { output_tokens: 10 }, timestamp: "not-a-date" }));
+    expect(s.firstTokenTsMs).toBeNull();
+    s = fold(s, aTurn("c", { id: "msg_3", usage: { output_tokens: 10 }, timestamp: "2026-06-11T00:00:09.000Z" }));
+    expect(s.firstTokenTsMs).toBe(Date.parse("2026-06-11T00:00:09.000Z"));
+  });
+
   it("sawError on an api-error line; sawCancelled on interruption; metricTokens excludes cache_read", () => {
     let s = initial();
     s = fold(s, JSON.stringify({ type: "assistant", isApiErrorMessage: true, message: { content: [] } }));

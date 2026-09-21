@@ -209,6 +209,69 @@ describe("ClaudeCodeReader incremental tail", () => {
     expect(sum.ref.mtime).toBe(fileMtime);
   });
 
+  it("startSec: null until the first token-bearing assistant event, then fixed across later appends", async () => {
+    // A brand-new session: the prompt is on disk before Claude has answered.
+    const prompt = JSON.stringify({ type: "user", timestamp: "2026-06-11T00:00:00.000Z", message: { content: "build it" } });
+    await fs.writeFile(file, prompt + "\n");
+    const r = new ClaudeCodeReader(mkRef(file));
+    expect((await r.readIncremental()).startSec).toBeNull(); // no token event yet → header shows no start
+
+    const reply = (ts: string, id: string): string =>
+      JSON.stringify({
+        type: "assistant",
+        timestamp: ts,
+        message: { id, usage: { input_tokens: 3, output_tokens: 7 }, content: [{ type: "text", text: "ok" }] },
+      });
+    await fs.appendFile(file, reply("2026-06-11T00:00:05.500Z", "msg_1") + "\n");
+    const start = Math.floor(Date.parse("2026-06-11T00:00:05.500Z") / 1000);
+    expect((await r.readIncremental()).startSec).toBe(start); // the reply, not the earlier prompt
+
+    await fs.appendFile(file, reply("2026-06-11T00:10:00.000Z", "msg_2") + "\n");
+    expect((await r.readIncremental()).startSec).toBe(start); // later token events don't move it
+  });
+
+  it("startSec after a shorter rewrite reflects the NEW content (or null), not the pre-truncate value", async () => {
+    const sec = (ts: string): number => Math.floor(Date.parse(ts) / 1000);
+    const reply = (ts: string, id: string, text = "ok"): string =>
+      JSON.stringify({
+        type: "assistant",
+        timestamp: ts,
+        message: { id, usage: { input_tokens: 3, output_tokens: 7 }, content: [{ type: "text", text }] },
+      });
+    const prompt = (ts: string, text: string): string =>
+      JSON.stringify({ type: "user", timestamp: ts, message: { content: text } });
+
+    // Original transcript: first token-bearing reply at T_OLD, padded so every
+    // rewrite below is strictly shorter (the reset only fires on size < byteOffset).
+    const T_OLD = "2026-06-11T00:00:05.000Z";
+    const original =
+      [
+        prompt("2026-06-11T00:00:00.000Z", "old question"),
+        reply(T_OLD, "msg_old_1", "x".repeat(4000)),
+        reply("2026-06-11T00:05:00.000Z", "msg_old_2"),
+      ].join("\n") + "\n";
+    await fs.writeFile(file, original);
+    const r = new ClaudeCodeReader(mkRef(file));
+    expect((await r.readIncremental()).startSec).toBe(sec(T_OLD));
+
+    // Rewritten in place with a different session whose first reply is at T_NEW.
+    const T_NEW = "2026-06-12T09:30:00.000Z";
+    const rewritten = [prompt("2026-06-12T09:29:58.000Z", "new question"), reply(T_NEW, "msg_new_1")].join("\n") + "\n";
+    expect(Buffer.byteLength(rewritten)).toBeLessThan(Buffer.byteLength(original)); // truncate precondition
+    await fs.writeFile(file, rewritten);
+    const afterRewrite = await r.readIncremental();
+    expect(afterRewrite.userTurns).toEqual(["new question"]); // the new content was read from byte 0
+    expect(afterRewrite.startSec).toBe(sec(T_NEW)); // not the stale T_OLD (first-wins must restart)
+
+    // Rewritten again, shorter still, with no token-bearing assistant event at all.
+    const noReply = prompt("2026-06-13T08:00:00.000Z", "fresh") + "\n";
+    expect(Buffer.byteLength(noReply)).toBeLessThan(Buffer.byteLength(rewritten)); // truncate precondition
+    await fs.writeFile(file, noReply);
+    const afterSecond = await r.readIncremental();
+    expect(afterSecond.userTurns).toEqual(["fresh"]);
+    expect(afterSecond.startSec).toBeNull(); // no reply yet → no start, not a carried-over value
+  });
+
   // --- concurrency: LocalDataSource can call one reader from two paths at once
   // (observed at startup: a watcher-triggered flush still in flight when the
   // priming loop reaches the same entry). Every byte must still fold exactly once.
@@ -253,7 +316,7 @@ describe("ClaudeCodeReader incremental tail", () => {
     await fs.writeFile(file, bigTranscript(400));
     const r = new ClaudeCodeReader(mkRef(file));
     const first = r.readIncremental(); // stats the file, then tails ~3 MB across many awaits
-    await new Promise((res) => setImmediate(res)); // let it get past its stat
+    await new Promise((res) => setImmediate(res)); // usually past its stat by now (not guaranteed)
     await fs.appendFile(
       file,
       JSON.stringify({
@@ -263,7 +326,9 @@ describe("ClaudeCodeReader incremental tail", () => {
       }) + "\n",
     );
     const second = r.readIncremental(); // issued AFTER the append (e.g. the flush that append triggered)
-    expect((await first).endedTurn).toBe(false);
+    // Pass 1's own result is not asserted: whether its stat ran before or after the
+    // append is up to the fs threadpool, and either answer is correct for pass 1.
+    await first;
     // Joining the in-flight pass would serve its pre-append snapshot and never see
     // the closing end_turn — the card would miss "waiting" until some later write.
     expect((await second).endedTurn).toBe(true);
