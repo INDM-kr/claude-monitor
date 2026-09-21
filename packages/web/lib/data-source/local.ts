@@ -8,7 +8,13 @@ import type {
   SessionSummary,
 } from "@claude-monitor/core";
 import { computeContext } from "@claude-monitor/core";
-import { ChatAdapter, ClaudeCodeAdapter, CoworkAdapter } from "@claude-monitor/adapter-claude-code";
+import {
+  ChatAdapter,
+  ClaudeCodeAdapter,
+  CodexAdapter,
+  CoworkAdapter,
+  CODEX_ADAPTER_ID,
+} from "@claude-monitor/adapter-claude-code";
 import { getHub } from "../sse/hub";
 import { loadConfig } from "../config";
 import { probeProcesses } from "../process-probe";
@@ -46,6 +52,9 @@ export class LocalDataSource implements DataSource {
       const list: AISessionAdapter[] = [
         new ClaudeCodeAdapter({ projectsDir: cfg.projectsDir, thresholds: cfg.thresholds }),
       ];
+      if (cfg.enableCodex) {
+        list.push(new CodexAdapter({ codexDir: cfg.codexDir, thresholds: cfg.thresholds }));
+      }
       if (cfg.enableCowork) {
         list.push(new CoworkAdapter({ coworkDir: cfg.coworkDir, thresholds: cfg.thresholds }));
       }
@@ -110,15 +119,16 @@ export class LocalDataSource implements DataSource {
   private async enrich(summary: SessionSummary): Promise<SessionSummary> {
     // Group by the repo's origin remote URL when resolvable (unifies worktrees /
     // clones of the same repo regardless of path). cwd gone / no remote → keep
-    // the reader's cwd-derived projectKey. Only Claude Code sessions have a repo
-    // workspace; skip the `git` spawn for cowork (its workspace is a synthetic
-    // label, and walking up could mis-resolve against an ancestor `.git`).
-    const isClaudeCode = summary.ref.adapterId === "claude-code";
-    const remote = isClaudeCode ? await remoteProject(summary.ref.workspace) : null;
+    // the reader's cwd-derived projectKey. Only adapters whose workspace is a
+    // real directory (Claude Code, Codex) get the `git` spawn; cowork/chat use a
+    // synthetic label, and walking up could mis-resolve against an ancestor `.git`.
+    const hasRepoWorkspace =
+      summary.ref.adapterId === "claude-code" || summary.ref.adapterId === CODEX_ADAPTER_ID;
+    const remote = hasRepoWorkspace ? await remoteProject(summary.ref.workspace) : null;
     let ref: SessionRef = summary.ref;
     if (remote) {
       ref = { ...summary.ref, projectKey: remote.key, projectLabel: remote.label };
-    } else if (isClaudeCode) {
+    } else if (hasRepoWorkspace) {
       // Non-git fallback: fold a subfolder of a non-git project (e.g. a `_plan`
       // planning dir) into the nearest ancestor that owns a root marker
       // (VCS dir / CLAUDE.md), so it groups with the project instead of as its own.

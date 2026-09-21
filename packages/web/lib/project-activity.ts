@@ -1,5 +1,6 @@
-import { readTokenTimeline } from "@claude-monitor/adapter-claude-code";
+import type { SessionRef } from "@claude-monitor/core";
 import { getDataSource } from "./data-source/local";
+import { tokenTimelineFor } from "./token-series";
 
 export interface ProjectActivity {
   projectKey: string;
@@ -25,14 +26,16 @@ export async function getProjectActivity(projectKey: string): Promise<ProjectAct
   const sessions = (await ds.snapshot()).filter((s) => s.ref.projectKey === projectKey);
   if (sessions.length === 0) return null;
 
-  const sources = [...new Set(sessions.map((s) => s.ref.source))];
+  // One read per transcript file; the ref picks the adapter-specific reader.
+  const byPath = new Map<string, SessionRef>();
+  for (const s of sessions) if (!byPath.has(s.ref.source)) byPath.set(s.ref.source, s.ref);
   const daily: Record<string, number> = {};
   const weekdayHour: number[][] = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
   let totalTokens = 0;
   let startMs: number | null = null;
 
-  for (const src of sources) {
-    const events = await readTokenTimeline(src);
+  for (const ref of byPath.values()) {
+    const events = await tokenTimelineFor(ref);
     for (const e of events) {
       if (e.tokens <= 0) continue;
       const d = new Date(e.ts);

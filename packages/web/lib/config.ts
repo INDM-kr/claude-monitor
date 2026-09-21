@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defaultThresholds, type StatusThresholds } from "@claude-monitor/core";
-import { defaultChatIdbDir, defaultCoworkDir } from "@claude-monitor/adapter-claude-code";
+import { defaultChatIdbDir, defaultCodexDir, defaultCoworkDir } from "@claude-monitor/adapter-claude-code";
 
 function intEnv(name: string, fallback: number): number {
   const v = process.env[name];
@@ -46,6 +46,11 @@ export interface AppConfig {
   enableChat: boolean;
   /** Claude Desktop IndexedDB root (override with `CM_CHAT_IDB_DIR`). */
   chatIdbDir: string;
+  /** Expose OpenAI Codex (CLI / Desktop) rollout threads. On by default —
+   *  `CM_ENABLE_CODEX=0` turns it off; a missing sessions dir just yields none. */
+  enableCodex: boolean;
+  /** Codex rollout root (override with `CM_CODEX_DIR`). */
+  codexDir: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -63,5 +68,7 @@ export function loadConfig(): AppConfig {
     coworkDir: process.env.CM_COWORK_DIR || defaultCoworkDir(),
     enableChat: boolEnv("CM_ENABLE_CHAT", false),
     chatIdbDir: process.env.CM_CHAT_IDB_DIR || defaultChatIdbDir(),
+    enableCodex: boolEnv("CM_ENABLE_CODEX", true),
+    codexDir: process.env.CM_CODEX_DIR || defaultCodexDir(),
   };
 }
