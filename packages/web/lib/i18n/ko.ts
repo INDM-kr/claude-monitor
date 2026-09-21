@@ -49,6 +49,8 @@ export const ko = {
     "claude-code": "Claude Code",
     "claude-desktop": "Claude Desktop",
     agent: "Agent",
+    codex: "Codex",
+    "codex-desktop": "Codex Desktop",
     unknown: "—",
   },
   filter: {

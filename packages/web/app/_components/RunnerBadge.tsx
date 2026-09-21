@@ -7,6 +7,8 @@ const STYLE: Record<RunnerKind, string> = {
   "claude-code": "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   "claude-desktop": "bg-sky-500/15 text-sky-300 border-sky-500/30",
   agent: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  codex: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  "codex-desktop": "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",
   unknown: "bg-zinc-700/40 text-zinc-400 border-zinc-600/40",
 };
 
@@ -16,6 +18,8 @@ const COMPACT: Record<RunnerKind, string> = {
   "claude-code": "text-emerald-300",
   "claude-desktop": "text-sky-300",
   agent: "text-amber-300",
+  codex: "text-rose-300",
+  "codex-desktop": "text-fuchsia-300",
   unknown: "text-zinc-400",
 };
 
