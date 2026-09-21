@@ -28,6 +28,8 @@ function agentStatusOf(
 export class ClaudeCodeReader implements SessionReader {
   private state: ParserState = initial();
   private cached: SessionSummary | null = null;
+  /** Tail of this reader's pass queue — see readIncremental(). */
+  private queue: Promise<unknown> = Promise.resolve();
   private readonly thresholds: StatusThresholds;
 
   constructor(public readonly ref: SessionRef, opts: ReaderOptions = {}) {
@@ -39,7 +41,22 @@ export class ClaudeCodeReader implements SessionReader {
     return statusFromMtime(mtime, now, this.thresholds);
   }
 
-  async readIncremental(): Promise<SessionSummary> {
+  /**
+   * Safe under concurrent calls: passes are SERIALIZED per reader — each starts
+   * after the previous one settles and re-stats the file itself. A pass mutates
+   * `state` (byteOffset + folded fields) across awaits, so two overlapping passes
+   * would read the same byte range and fold it twice (observed at startup: a
+   * watcher flush still in flight when the priming loop reached the same entry).
+   * Joining the in-flight pass instead would be stale — its stat can predate the
+   * write that triggered this call, missing e.g. the turn's closing end_turn.
+   */
+  readIncremental(): Promise<SessionSummary> {
+    const run = this.queue.then(() => this.readPass());
+    this.queue = run.catch(() => undefined); // a failed pass must not block later ones
+    return run;
+  }
+
+  private async readPass(): Promise<SessionSummary> {
     const st = await stat(this.ref.source);
     const size = st.size;
     const mtimeSec = Math.floor(st.mtimeMs / 1000);

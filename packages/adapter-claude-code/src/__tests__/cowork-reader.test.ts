@@ -70,6 +70,25 @@ describe("CoworkReader", () => {
     expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:21.374Z") / 1000));
   });
 
+  it("concurrent readIncremental calls fold each record once (== a sequential read)", async () => {
+    await write(await fixtureLines("cowork-multiturn.jsonl"));
+    const baseline = await new CoworkReader(refFor(file)).readIncremental();
+    const r = new CoworkReader(refFor(file));
+    const out = await Promise.all([r.readIncremental(), r.readIncremental(), r.readIncremental()]);
+    for (const s of out) {
+      expect(s.totalTokens).toBe(baseline.totalTokens);
+      expect(s.userTurns).toEqual(baseline.userTurns);
+    }
+    expect((await r.readIncremental()).totalTokens).toBe(baseline.totalTokens);
+  });
+
+  it("a failed pass (file briefly missing) still rejects, and does not block later reads", async () => {
+    const r = new CoworkReader(refFor(file)); // not written yet → stat ENOENT
+    await expect(r.readIncremental()).rejects.toThrow();
+    await write(await fixtureLines("cowork-simple.jsonl"));
+    expect((await r.readIncremental()).userTurns).toEqual(["build me a market dashboard"]);
+  });
+
   it("simple: a [1m] init model yields a 1M context window", async () => {
     await write(await fixtureLines("cowork-simple.jsonl"));
     const s = await new CoworkReader(refFor(file)).readIncremental();

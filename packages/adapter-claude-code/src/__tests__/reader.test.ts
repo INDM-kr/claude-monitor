@@ -208,4 +208,71 @@ describe("ClaudeCodeReader incremental tail", () => {
     const sum = await new ClaudeCodeReader(mkRef(file)).readIncremental();
     expect(sum.ref.mtime).toBe(fileMtime);
   });
+
+  // --- concurrency: LocalDataSource can call one reader from two paths at once
+  // (observed at startup: a watcher-triggered flush still in flight when the
+  // priming loop reaches the same entry). Every byte must still fold exactly once.
+
+  /** Timestamped human turns + per-message usage, padded so one pass spans many
+   *  64 KiB chunk reads (i.e. it yields mid-tail). Ends mid-turn (no end_turn). */
+  function bigTranscript(turns: number): string {
+    const lines: string[] = [];
+    for (let i = 0; i < turns; i++) {
+      const ts = new Date(Date.UTC(2026, 5, 11, 0, 0, i)).toISOString();
+      lines.push(JSON.stringify({ type: "user", timestamp: ts, message: { content: `question ${i}` } }));
+      lines.push(
+        JSON.stringify({
+          type: "assistant",
+          timestamp: ts,
+          message: {
+            id: `msg_${i}`,
+            stop_reason: "tool_use",
+            usage: { input_tokens: 1, cache_creation_input_tokens: 10, output_tokens: 100 },
+            content: [{ type: "text", text: "x".repeat(8000) }],
+          },
+        }),
+      );
+    }
+    return lines.join("\n") + "\n";
+  }
+
+  it("concurrent readIncremental calls fold each byte once (== a sequential read)", async () => {
+    await fs.writeFile(file, bigTranscript(400));
+    const baseline = await new ClaudeCodeReader(mkRef(file)).readIncremental();
+    const r = new ClaudeCodeReader(mkRef(file));
+    const out = await Promise.all([r.readIncremental(), r.readIncremental(), r.readIncremental()]);
+    for (const s of out) {
+      expect(s.totalTokens).toBe(baseline.totalTokens);
+      expect(s.userTurns).toEqual(baseline.userTurns);
+    }
+    // …and the reader's state is intact for the next (sequential) read.
+    expect((await r.readIncremental()).totalTokens).toBe(baseline.totalTokens);
+  });
+
+  it("a call issued after an append reflects it, even while an earlier pass is in flight", async () => {
+    await fs.writeFile(file, bigTranscript(400));
+    const r = new ClaudeCodeReader(mkRef(file));
+    const first = r.readIncremental(); // stats the file, then tails ~3 MB across many awaits
+    await new Promise((res) => setImmediate(res)); // let it get past its stat
+    await fs.appendFile(
+      file,
+      JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-06-11T01:00:00.000Z",
+        message: { id: "msg_final", stop_reason: "end_turn", content: [{ type: "text", text: "done" }] },
+      }) + "\n",
+    );
+    const second = r.readIncremental(); // issued AFTER the append (e.g. the flush that append triggered)
+    expect((await first).endedTurn).toBe(false);
+    // Joining the in-flight pass would serve its pre-append snapshot and never see
+    // the closing end_turn — the card would miss "waiting" until some later write.
+    expect((await second).endedTurn).toBe(true);
+  });
+
+  it("a failed pass (file briefly missing) still rejects, and does not block later reads", async () => {
+    const r = new ClaudeCodeReader(mkRef(file)); // not created yet → stat ENOENT
+    await expect(r.readIncremental()).rejects.toThrow();
+    await fs.writeFile(file, LINE_C + "\n");
+    expect((await r.readIncremental()).lastText).toBe("finished");
+  });
 });

@@ -36,6 +36,8 @@ export class CoworkReader implements SessionReader {
   /** Whether the LAST record read was a clean `result` (= turn finished). */
   private lastWasCleanResult = false;
   private cached: SessionSummary | null = null;
+  /** Tail of this reader's pass queue — see readIncremental(). */
+  private queue: Promise<unknown> = Promise.resolve();
   private readonly thresholds: StatusThresholds;
 
   constructor(public readonly ref: SessionRef, opts: CoworkReaderOptions = {}) {
@@ -47,7 +49,15 @@ export class CoworkReader implements SessionReader {
     return statusFromMtime(mtime, now, this.thresholds);
   }
 
-  async readIncremental(): Promise<SessionSummary> {
+  /** Serialized per reader, for the same reason as ClaudeCodeReader.readIncremental:
+   *  a pass advances `byteOffset` and folds into `state` across awaits. */
+  readIncremental(): Promise<SessionSummary> {
+    const run = this.queue.then(() => this.readPass());
+    this.queue = run.catch(() => undefined); // a failed pass must not block later ones
+    return run;
+  }
+
+  private async readPass(): Promise<SessionSummary> {
     const st = await stat(this.ref.source);
     const size = st.size;
     const mtimeSec = Math.floor(st.mtimeMs / 1000);
