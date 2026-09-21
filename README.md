@@ -133,6 +133,8 @@ bash scripts/uninstall.sh
 | `CM_COWORK_DIR` | cowork 세션 루트 디렉터리 | `$HOME/Library/Application Support/Claude/local-agent-mode-sessions` |
 | `CM_ENABLE_CHAT` | Claude Desktop의 **claude.ai 일반 채팅** 대화를 세션 목록에 노출(실험 기능). `1`/`true`/`yes`/`on`이면 켜짐 | 미설정 → `false` (꺼짐) |
 | `CM_CHAT_IDB_DIR` | Claude Desktop IndexedDB 루트(그 아래 `https_claude.ai_*.indexeddb.blob`을 스캔) | `$HOME/Library/Application Support/Claude/IndexedDB` |
+| `CM_ENABLE_CODEX` | OpenAI **Codex**(CLI·Desktop) 세션을 목록에 노출. `0`/`false`/`no`/`off`면 꺼짐 | 미설정 → `true` (켜짐) |
+| `CM_CODEX_DIR` | Codex rollout 로그 루트(`YYYY/MM/DD/rollout-*.jsonl`) | `$HOME/.codex/sessions` |
 
 > 주의 (`CM_BEARER_TOKEN`): 토큰을 설정하면 **브라우저 UI가 정상 동작하지 않습니다**. 브라우저는 페이지 이동·SSE 연결에 커스텀 `Authorization` 헤더를 실어 보낼 수 없으므로, 실시간 업데이트(SSE)와 Kill 버튼이 fail-closed로 막힙니다. 토큰 모드는 헤드리스/프로그램 방식 API 클라이언트 용도로만 사용하세요.
 >
@@ -143,6 +145,8 @@ bash scripts/uninstall.sh
 > 참고 (`CM_ENABLE_COWORK`): 켜면 Claude Desktop cowork 세션이 `Claude Desktop` 러너 배지와 함께 한 프로젝트 그룹으로 묶여 표시됩니다. cowork는 본질적으로 과거 데이터일 수 있어 **`CM_MAX_AGE_HOURS` 컷오프에서 면제**됩니다(플래그를 켜면 나이와 무관하게 표시 — `status`·`filter` 필터는 그대로 적용). cowork `audit.jsonl`은 추가-전용(append-only) 로그라 일반 세션과 동일한 증분 와칭으로 라이브 갱신되며, 슬래시 명령 전용 턴은 (Claude Code와 동일하게) 프롬프트 라벨로 표시되지 않고, 토큰 합계는 공유 파서의 기존 집계 방식을 따릅니다.
 >
 > 참고 (`CM_ENABLE_CHAT`, 실험 기능): claude.ai 웹뷰가 IndexedDB에 남기는 react-query 캐시를 읽어 **최근 대화 목록**(제목·요약·모델·최근 활동, 라이브)을 `Claude Chat` 그룹으로 표시합니다. 최근에 **연** 대화는 캐시에 전문(tree)이 남아 있어 턴 내역까지 보이고, 나머지는 메타데이터만 보입니다(전체 이력 미러 아님 — 캐시에 있는 만큼만). cowork와 달리 `CM_MAX_AGE_HOURS` 컷오프가 **그대로 적용**됩니다(목록이 라이브라 최근 활동 채팅이 자연스럽게 노출; 전체는 `all` 파라미터로 열람). 캐시 포맷·앱 스키마는 claude.ai 배포에 따라 바뀔 수 있으며, 이 경우 어댑터는 에러 대신 **빈 결과로 조용히 강등**됩니다.
+>
+> 참고 (`CM_ENABLE_CODEX`): `~/.codex/sessions`의 rollout JSONL을 읽어 Codex 세션을 **Claude Code 세션과 같은 프로젝트 그룹**에 표시합니다(cwd의 git remote 기준 통합). 러너 배지는 `Codex`(CLI/`codex exec`) 또는 `Codex Desktop`입니다. Codex가 `spawn_agent`로 띄운 하위 스레드는 부모 카드 아래 하위 에이전트로 나오고, Codex 내부 승인 검토(guardian) 스레드는 표시하지 않습니다. 컨텍스트 압축 뒤 이어지는 새 창 파일(`…_<window>.jsonl`)은 별도 세션으로 표시됩니다. 스레드별 프로세스가 없어 Kill 버튼은 제공되지 않으며, 토큰 수치는 Claude와 같은 기준(비캐시 입력 + 출력)으로 집계되어 Codex 자체 합계(캐시 포함)와 다릅니다. Codex 토큰은 상단 Claude 사용량 게이지(5시간/7일)에는 합산되지 않습니다.
 
 ---
 
@@ -321,7 +325,7 @@ claude-monitor의 상태와 지표는 모두 **트랜스크립트 파일(JSONL)�
 claude-monitor는 pnpm 모노레포로, 세 개의 패키지로 구성됩니다.
 
 - `@claude-monitor/core` — 세션 타입, 상태 임계값/파생 로직, 프로젝트 키 산출, 컨텍스트 한도 계산 등 핵심 로직.
-- `@claude-monitor/adapter-claude-code` — `~/.claude/projects/`의 JSONL 트랜스크립트를 읽고, chokidar로 파일을 감시(top-level + 하위 에이전트 디렉터리)하는 어댑터.
+- `@claude-monitor/adapter-claude-code` — `~/.claude/projects/`의 JSONL 트랜스크립트를 읽고, chokidar로 파일을 감시(top-level + 하위 에이전트 디렉터리)하는 어댑터. 같은 패키지에 Claude Desktop cowork(`cowork/`), claude.ai chat(`chat/`), OpenAI Codex rollout(`codex/`) 어댑터가 함께 있다.
 - `@claude-monitor/web` — Next.js 기반 웹 UI. 어댑터를 LocalDataSource로 감싸 git remote 기반 프로젝트 통합·러너 실측·컨텍스트 한도 보강을 수행하고, API와 대시보드 화면을 제공.
 
 **데이터 흐름:** chokidar 파일 와칭 → 변경 감지 시 트랜스크립트 파싱 → SSE(`/api/events`)로 브라우저에 실시간 푸시 → 대시보드가 1초 간격 클라이언트 틱과 함께 상대 시간/경과/상태 감쇠를 갱신.
@@ -344,7 +348,7 @@ scripts/
   uninstall.sh           설치 산출물 제거 (소스는 유지)
 packages/
   core/                  공유 타입·유틸·어댑터/위젯 레지스트리
-  adapter-claude-code/   JSONL 파서·증분 tail 리더·chokidar 와처
+  adapter-claude-code/   JSONL 파서·증분 tail 리더·chokidar 와처 (+ cowork/ chat/ codex/ 어댑터)
   web/                   Next.js 14 App Router 대시보드 + SSE
 ```
 
@@ -355,7 +359,7 @@ packages/
 | `GET /api/health` | 불필요 | 시스템 헬스 체크. `ok: true`, 어댑터 목록, 세션 수 반환. **유일하게 인증이 필요 없는 엔드포인트** |
 | `GET /api/usage` | Bearer 필요 | 토큰 사용량. 출처(`api` 또는 `estimate`), OAuth 값, 로컬 값, 현재 시각 반환 |
 | `GET /api/sessions` | Bearer 필요 | 프로젝트별로 묶인 세션 목록. 쿼리: `maxAgeHours`, `all`(1\|0), `filter`(glob), `status`. 자식 세션은 `children` 배열로 분리 반환 |
-| `GET /api/sessions/[id]` | Bearer 필요 | 단일 세션 상세. 쿼리 `adapter`(기본 `claude-code`). 없으면 404 |
+| `GET /api/sessions/[id]` | Bearer 필요 | 단일 세션 상세. 쿼리 `adapter`(기본 `claude-code`; `codex`, `claude-cowork`, `claude-chat`). 없으면 404 |
 | `GET /api/events` | Bearer 필요 | SSE 스트림. 이벤트 종류: `summary`, `removed`, `heartbeat`(30초 간격). 초기 heartbeat 후 스트리밍 |
 | `POST /api/sessions/[id]/kill` | Bearer 필요 | 세션 종료. 200(종료됨) / 404(없음) / 409(종료 실패·충돌) |
 
