@@ -62,7 +62,97 @@ describe("CoworkReader", () => {
     expect(s.agentStatus).toBeNull();
     expect(s.metrics).toBeNull();
     expect(s.model).toBe("claude-opus-4-7"); // display model has no [1m]
-    expect(s.totalTokens).toBeGreaterThan(0);
+    // Same Σ the project detail page's readTokenTimeline reports for this file —
+    // the list header and the detail page must not disagree for cowork.
+    expect(s.totalTokens).toBe(36965 + 4033);
+    // startSec = the first reply, stamped at its last content block (record 8) — the
+    // same stamp the detail page's token timeline gives that message; not the
+    // pre-init user echo, and not the reply's first block (record 6, 18:02:21).
+    expect(s.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:33.982Z") / 1000));
+  });
+
+  it("concurrent readIncremental calls fold each record once (== a sequential read)", async () => {
+    await write(await fixtureLines("cowork-multiturn.jsonl"));
+    const baseline = await new CoworkReader(refFor(file)).readIncremental();
+    const r = new CoworkReader(refFor(file));
+    const out = await Promise.all([r.readIncremental(), r.readIncremental(), r.readIncremental()]);
+    for (const s of out) {
+      expect(s.totalTokens).toBe(baseline.totalTokens);
+      expect(s.userTurns).toEqual(baseline.userTurns);
+    }
+    expect((await r.readIncremental()).totalTokens).toBe(baseline.totalTokens);
+  });
+
+  /** One long in-progress cowork turn (fixture record shapes): init, the isReplay
+   *  human turn, then `blocks` assistant records (own msg id + usage, ~8 KB text
+   *  each) so one pass spans many 64 KiB chunk reads. No `result` → not ended. */
+  function bigCoworkTranscript(blocks: number): string {
+    const at = (s: number): string => new Date(Date.UTC(2026, 4, 23, 18, 0, s)).toISOString();
+    const lines: object[] = [
+      { type: "system", subtype: "init", model: "claude-opus-4-7", claude_code_version: "2.1.149", permissionMode: "default", _audit_timestamp: at(0) },
+      { type: "user", isReplay: true, timestamp: at(1), message: { role: "user", content: "build me a market dashboard" }, _audit_timestamp: at(1) },
+    ];
+    for (let i = 0; i < blocks; i++) {
+      lines.push({
+        type: "assistant",
+        _audit_timestamp: at(2 + i),
+        message: {
+          model: "claude-opus-4-7",
+          id: `msg_${i}`,
+          role: "assistant",
+          stop_reason: null,
+          usage: { input_tokens: 1, cache_creation_input_tokens: 10, output_tokens: 100 },
+          content: [{ type: "text", text: "x".repeat(8000) }],
+        },
+      });
+    }
+    return lines.map((o) => JSON.stringify(o)).join("\n") + "\n";
+  }
+
+  it("a call issued after an append reflects it, even while an earlier pass is in flight", async () => {
+    await write(bigCoworkTranscript(400));
+    const r = new CoworkReader(refFor(file));
+    const first = r.readIncremental(); // stats the file, then tails ~3 MB across many awaits
+    await new Promise((res) => setImmediate(res)); // usually past its stat by now (not guaranteed)
+    await fs.appendFile(
+      file,
+      JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "dashboard ready", _audit_timestamp: "2026-05-23T19:00:00.000Z" }) + "\n",
+    );
+    const second = r.readIncremental(); // issued AFTER the append (e.g. the flush that append triggered)
+    // Pass 1's own result is not asserted: whether its stat saw the append is up to
+    // the fs threadpool, and either answer is correct for pass 1.
+    await first;
+    const b = await second;
+    // Joining the in-flight pass would serve its pre-append snapshot and never see
+    // the closing result — the card would miss "waiting" until some later write.
+    expect(b.endedTurn).toBe(true);
+    expect(b.lastText).toBe("dashboard ready");
+    // …and the queued pass continued from pass 1's offset: every record folded once.
+    const fresh = await new CoworkReader(refFor(file)).readIncremental();
+    expect(b.totalTokens).toBe(fresh.totalTokens);
+    expect(b.userTurns).toEqual(fresh.userTurns);
+  });
+
+  it("startSec: null before the first assistant reply, then that reply's _audit_timestamp", async () => {
+    const all = (await fixtureLines("cowork-simple.jsonl")).split("\n").filter((l) => l.trim());
+    // Records 1–5: pre-init user echo, rate_limit_event, system/init, system/status,
+    // the isReplay human turn — no assistant record yet.
+    await write(all.slice(0, 5).join("\n") + "\n");
+    const reader = new CoworkReader(refFor(file));
+    const early = await reader.readIncremental();
+    expect(early.userTurns).toEqual(["build me a market dashboard"]); // the turn is already visible…
+    expect(early.startSec).toBeNull(); // …but no token-bearing event → no project start yet
+
+    await fs.appendFile(file, all.slice(5).join("\n") + "\n");
+    const fin = await reader.readIncremental();
+    expect(fin.startSec).toBe(Math.floor(Date.parse("2026-05-23T18:02:33.982Z") / 1000)); // reply's last block
+  });
+
+  it("a failed pass (file briefly missing) still rejects, and does not block later reads", async () => {
+    const r = new CoworkReader(refFor(file)); // not written yet → stat ENOENT
+    await expect(r.readIncremental()).rejects.toThrow();
+    await write(await fixtureLines("cowork-simple.jsonl"));
+    expect((await r.readIncremental()).userTurns).toEqual(["build me a market dashboard"]);
   });
 
   it("simple: a [1m] init model yields a 1M context window", async () => {

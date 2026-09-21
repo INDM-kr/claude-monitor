@@ -8,6 +8,16 @@ export interface UsagePoint {
 
 const MAX_POINTS = 500;
 
+/** Timestamp (ms) of one transcript record, or NaN when it carries none.
+ *  Cowork `audit.jsonl` records carry `_audit_timestamp` instead of a top-level
+ *  `timestamp`; the cowork reader aliases it before `fold()`, but these readers
+ *  parse the RAW source file, so they must accept both — otherwise every cowork
+ *  event is dropped and the project/session pages show zero usage. */
+function recordTsMs(obj: { timestamp?: string; _audit_timestamp?: string }): number {
+  const raw = obj.timestamp ?? obj._audit_timestamp;
+  return raw ? Date.parse(raw) : NaN;
+}
+
 export async function readUsageSeries(source: string): Promise<UsagePoint[]> {
   let text: string;
   try {
@@ -19,14 +29,14 @@ export async function readUsageSeries(source: string): Promise<UsagePoint[]> {
   for (const line of text.split("\n")) {
     const t = line.trim();
     if (!t) continue;
-    let obj: { type?: string; timestamp?: string; message?: { usage?: Record<string, unknown> } };
+    let obj: { type?: string; timestamp?: string; _audit_timestamp?: string; message?: { usage?: Record<string, unknown> } };
     try {
       obj = JSON.parse(t);
     } catch {
       continue;
     }
     if (obj.type !== "assistant" || !obj.message?.usage) continue;
-    const ts = obj.timestamp ? Date.parse(obj.timestamp) : NaN;
+    const ts = recordTsMs(obj);
     if (Number.isNaN(ts)) continue;
     out.push({ ts, tokens: usageContextTokens(obj.message.usage) });
   }
@@ -48,14 +58,14 @@ export async function readTokenTimeline(source: string): Promise<UsagePoint[]> {
   for (const line of text.split("\n")) {
     const t = line.trim();
     if (!t) continue;
-    let obj: { type?: string; timestamp?: string; message?: { id?: string; usage?: Record<string, unknown> } };
+    let obj: { type?: string; timestamp?: string; _audit_timestamp?: string; message?: { id?: string; usage?: Record<string, unknown> } };
     try {
       obj = JSON.parse(t);
     } catch {
       continue;
     }
     if (obj.type !== "assistant" || !obj.message?.usage) continue;
-    const ts = obj.timestamp ? Date.parse(obj.timestamp) : NaN;
+    const ts = recordTsMs(obj);
     if (Number.isNaN(ts)) continue;
     const point = { ts, tokens: metricTokens(obj.message.usage) };
     // One assistant message is split into per-content-block records that repeat

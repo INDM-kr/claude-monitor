@@ -65,6 +65,15 @@ export interface ParserState {
   /** Number of tool_use calls. */
   toolCount: number;
   firstTsMs: number | null;
+  /** Timestamp (ms) of the first assistant message carrying positive token usage —
+   *  the "project start" as the detail page defines it (readTokenTimeline / project
+   *  activity count only token-bearing assistant events), stamped the same way: at
+   *  that message's last consecutive content-block record. Distinct from firstTsMs,
+   *  which is the first timestamped record of ANY type (usually the opening prompt). */
+  firstTokenTsMs: number | null;
+  /** Message id whose later content blocks still move firstTokenTsMs; null once
+   *  another message starts (the start is then final). */
+  firstTokenMsgId: string | null;
   lastTsMs: number | null;
   /** stop_reason of the last assistant message ("end_turn" = finished cleanly). */
   lastStopReason: string | null;
@@ -104,6 +113,8 @@ export function initial(): ParserState {
     totalTokens: 0,
     toolCount: 0,
     firstTsMs: null,
+    firstTokenTsMs: null,
+    firstTokenMsgId: null,
     lastTsMs: null,
     lastStopReason: null,
     sawError: false,
@@ -154,9 +165,11 @@ export function fold(state: ParserState, line: string): ParserState {
   if (typeof obj.entrypoint === "string") state.entrypoint = obj.entrypoint;
   if (typeof obj.permissionMode === "string") state.mode = obj.permissionMode;
 
+  let recTsMs: number | null = null;
   if (typeof obj.timestamp === "string") {
     const ms = Date.parse(obj.timestamp);
     if (Number.isFinite(ms)) {
+      recTsMs = ms;
       if (state.firstTsMs == null) state.firstTsMs = ms;
       state.lastTsMs = ms;
     }
@@ -173,6 +186,22 @@ export function fold(state: ParserState, line: string): ParserState {
       state.contextTokens = usageContextTokens(msg.usage);
       const mt = metricTokens(msg.usage);
       const id = typeof msg.id === "string" && msg.id ? msg.id : null;
+      // Project start, stamped as the detail page's readTokenTimeline stamps it:
+      // same gate (assistant + usage + tokens > 0 + ts), and a message split into
+      // content-block records keeps the LAST block's timestamp (the timeline
+      // replaces a repeated id's point, timestamp included). Frozen once another
+      // message starts, so list and detail agree even when a reply spans midnight.
+      if (obj.type === "assistant" && recTsMs != null) {
+        if (state.firstTokenTsMs == null) {
+          if (mt > 0) {
+            state.firstTokenTsMs = recTsMs;
+            state.firstTokenMsgId = id;
+          }
+        } else if (state.firstTokenMsgId != null) {
+          if (id === state.firstTokenMsgId) state.firstTokenTsMs = recTsMs;
+          else state.firstTokenMsgId = null;
+        }
+      }
       if (id != null && id === state.lastUsageMsgId) {
         // Another record of the SAME assistant message (per-content-block
         // split): replace the previous contribution instead of summing the

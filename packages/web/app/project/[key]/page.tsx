@@ -4,17 +4,9 @@ import { getProjectActivity } from "../../../lib/project-activity";
 import { getDataSource } from "../../../lib/data-source/local";
 import { ProjectHeatmap } from "../../_components/ProjectHeatmap";
 import { t } from "../../../lib/i18n/t";
+import { fmtCount, fmtDate } from "../../../lib/fmt";
 
 export const dynamic = "force-dynamic";
-
-function fmtCount(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
-function fmtDate(sec: number): string {
-  return new Date(sec * 1000).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
 
 export default async function ProjectDetail({ params }: { params: { key: string } }) {
   const projectKey = decodeURIComponent(params.key);
