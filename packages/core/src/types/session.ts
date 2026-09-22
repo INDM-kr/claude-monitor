@@ -1,6 +1,13 @@
 export type SessionStatus = "live" | "idle" | "waiting" | "stop";
 
-export type RunnerKind = "conductor" | "claude-code" | "claude-desktop" | "agent" | "unknown";
+export type RunnerKind =
+  | "conductor"
+  | "claude-code"
+  | "claude-desktop"
+  | "agent"
+  | "codex"
+  | "codex-desktop"
+  | "unknown";
 
 /** Lifecycle of a sub-agent / workflow child run (not used for top-level sessions). */
 export type AgentStatus = "done" | "cancelled" | "error" | "running";

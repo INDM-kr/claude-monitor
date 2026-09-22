@@ -6,7 +6,8 @@ export interface UsagePoint {
   tokens: number;
 }
 
-const MAX_POINTS = 500;
+/** Cap for the session-detail context trend (last N points). */
+export const MAX_POINTS = 500;
 
 /** Timestamp (ms) of one transcript record, or NaN when it carries none.
  *  Cowork `audit.jsonl` records carry `_audit_timestamp` instead of a top-level

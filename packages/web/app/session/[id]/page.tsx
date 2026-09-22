@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { readUsageSeries } from "@claude-monitor/adapter-claude-code";
+import { usageSeriesFor } from "../../../lib/token-series";
 import { getDataSource } from "../../../lib/data-source/local";
 import { t } from "../../../lib/i18n/t";
 import { UsageTrend } from "../../_components/UsageTrend";
@@ -27,7 +27,7 @@ export default async function SessionDetail({
   const ds = getDataSource();
   const s = await ds.getById(adapterId, params.id);
   if (!s) notFound();
-  const series = await readUsageSeries(s.ref.source);
+  const series = await usageSeriesFor(s.ref);
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
