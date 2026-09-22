@@ -1,16 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../config";
+import { snapshotEnv } from "./helpers";
 
-const KEYS = ["CM_ENABLE_CODEX", "CM_CODEX_DIR"];
-const saved: Record<string, string | undefined> = {};
-for (const k of KEYS) saved[k] = process.env[k];
-
-afterEach(() => {
-  for (const k of KEYS) {
-    if (saved[k] == null) delete process.env[k];
-    else process.env[k] = saved[k];
-  }
-});
+const restoreEnv = snapshotEnv(["CM_ENABLE_CODEX", "CM_CODEX_DIR"]);
+afterEach(restoreEnv);
 
 describe("loadConfig — Codex", () => {
   it("is on by default and points at ~/.codex/sessions", () => {

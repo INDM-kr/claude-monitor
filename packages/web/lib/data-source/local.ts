@@ -138,13 +138,13 @@ export class LocalDataSource implements DataSource {
       }
     }
 
-    const probe = await probeProcesses();
     // The ps probe (and ctxLimits) are keyed by the bare session id. Only Claude
-    // Code sessions have a live `claude` process; gate the lookup by adapterId so
-    // a cowork id can't collide with a Claude Code session id and borrow its
-    // pid/runner/context-limit. (Cowork's runner/pid/context come from the reader
-    // and survive when `e` is undefined.)
-    const e = summary.ref.adapterId === "claude-code" ? probe.get(summary.ref.id) : undefined;
+    // Code sessions have a live `claude` process; gate the probe by adapterId so
+    // a cowork/Codex id can't collide with a Claude Code session id and borrow
+    // its pid/runner/context-limit — and so their flushes never spawn `ps` for a
+    // result nobody reads. (Their runner/pid/context come from the reader and
+    // survive when `e` is undefined.)
+    const e = summary.ref.adapterId === "claude-code" ? (await probeProcesses()).get(summary.ref.id) : undefined;
 
     // Remember a positively-detected context limit (1M for [1m]) so it survives
     // the process exiting; reuse it as the fallback when no live process is found.

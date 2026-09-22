@@ -5,6 +5,7 @@ import { join, relative, sep } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { AdapterEvent, SessionRef } from "@claude-monitor/core";
 import { projectIdentityFromCwd, shortenWorkspace } from "@claude-monitor/core";
+import { isIgnoredWatchPath } from "../watcher.js";
 import { CODEX_ADAPTER_ID } from "./constants.js";
 import { codexSessionIdFromPath, parseCodexMeta, type CodexMeta } from "./meta.js";
 
@@ -22,8 +23,9 @@ const ROLLOUT_DEPTH = 4;
 const FIRST_LINE_MAX = 8 * 1024 * 1024;
 
 /** Read the first `\n`-terminated line of a file (without the newline). Null
- *  when the file has no complete first line yet (still being created) or the
- *  first line exceeds `maxBytes`. */
+ *  when the file has no complete first line yet (still being created); throws
+ *  a RangeError when the first line exceeds `maxBytes` (not a rollout file —
+ *  callers can remember that verdict instead of re-reading on every change). */
 export async function readFirstLine(path: string, maxBytes = FIRST_LINE_MAX): Promise<string | null> {
   const fh = await open(path, "r");
   try {
@@ -42,6 +44,7 @@ export async function readFirstLine(path: string, maxBytes = FIRST_LINE_MAX): Pr
       chunks.push(Buffer.from(view));
       pos += bytesRead;
     }
+    if (pos >= maxBytes) throw new RangeError(`first line of ${path} exceeds ${maxBytes} bytes`);
     return null;
   } finally {
     await fh.close();
@@ -49,11 +52,10 @@ export async function readFirstLine(path: string, maxBytes = FIRST_LINE_MAX): Pr
 }
 
 /** Ignore hidden segments inside the watched tree (`.DS_Store`…), judged
- *  relative to the root so the `.codex` ancestor never ignores everything. */
+ *  relative to the root so the `.codex` ancestor never ignores everything —
+ *  the same rule the Claude Code and cowork watchers apply. */
 export function isIgnoredCodexPath(codexDir: string, p: string): boolean {
-  const rel = relative(codexDir, p);
-  if (rel === "" || rel.startsWith("..")) return false;
-  return rel.split(sep).some((s) => s.startsWith("."));
+  return isIgnoredWatchPath(codexDir, p);
 }
 
 async function safeReaddir(dir: string): Promise<string[]> {
@@ -90,7 +92,7 @@ export class CodexWatcher extends EventEmitter {
 
   async start(): Promise<void> {
     this.watcher = chokidar.watch(this.codexDir, {
-      depth: 3, // YYYY → MM → DD → rollout-*.jsonl
+      depth: ROLLOUT_DEPTH - 1, // YYYY → MM → DD → rollout-*.jsonl
       persistent: true,
       ignoreInitial: true, // scan() yields existing files; a second `add` per file would double the startup fan-out
       awaitWriteFinish: false,
@@ -172,7 +174,14 @@ export class CodexWatcher extends EventEmitter {
     if (!st || !st.isFile()) return null;
     let meta = this.metaByPath.get(filePath);
     if (meta === undefined) {
-      const first = await readFirstLine(filePath).catch(() => null);
+      let first: string | null;
+      try {
+        first = await readFirstLine(filePath);
+      } catch (e) {
+        if (!(e instanceof RangeError)) return null; // transient read error — retry on the next event
+        first = null;
+        this.metaByPath.set(filePath, null); // oversized first line: not a rollout file, never re-read
+      }
       if (first == null) return null; // first line not complete yet — retry on the next event
       const parsed = parseCodexMeta(first);
       meta = parsed != null && parsed.kind !== "hidden" ? parsed : null;

@@ -56,7 +56,7 @@ describe("foldCodex — meta, turn lifecycle, model/mode", () => {
   it("takes cwd/version/originator from the first meta and ignores a repeated (parent) meta", () => {
     ord = 0;
     const s = foldAll([meta(), rec("session_meta", { id: "other", cwd: "/elsewhere", originator: "codex_exec", cli_version: "0.1.0", source: "exec" })]);
-    expect(s.cwd).toBe("/Users/alice/projects/demo");
+    expect(s.meta?.cwd).toBe("/Users/alice/projects/demo");
     expect(s.version).toBe("0.154.0");
     expect(s.originator).toBe("Codex Desktop");
   });
@@ -306,10 +306,9 @@ describe("foldCodex — caps, fallbacks, malformed inputs", () => {
     ord = 0;
     const s = foldAll([rec("session_meta", { id: THREAD, originator: "codex_exec" }), userMsg("hi")]);
     expect(s.meta).toBeNull();
-    expect(s.cwd).toBeNull();
     expect(s.userTurns).toEqual(["hi"]);
     foldCodex(s, meta());
-    expect(s.cwd).toBe("/Users/alice/projects/demo");
+    expect(s.meta?.cwd).toBe("/Users/alice/projects/demo");
     expect(s.version).toBe("0.154.0");
   });
 });
@@ -333,5 +332,21 @@ describe("foldCodex — review fixes: non-object lines, corrupt token fields, co
     // new thread: input 60000 (cached 0) + output 100 → total 60100 > 51000 but cached dropped → reset
     const s = foldAll([meta(), tokenCount(usage(50000, 40000, 1000)), tokenCount(usage(60000, 0, 100))]);
     expect(s.totalTokens).toBe(11000 + 60100);
+  });
+});
+
+describe("foldCodex — defensive guards", () => {
+  it("null payload, unparseable timestamp, non-positive/non-number context window, string content, junk content items", () => {
+    ord = 0;
+    const s = foldAll([meta()]);
+    foldCodex(s, JSON.stringify({ timestamp: "not-a-date", ordinal: 1, type: "event_msg", payload: null }));
+    expect(s.lastTsMs).toBe(Date.parse("2026-09-21T11:14:22.358Z"));
+    foldCodex(s, rec("event_msg", { type: "task_started", model_context_window: 0 }));
+    foldCodex(s, rec("event_msg", { type: "task_started", model_context_window: "258400" }));
+    expect(s.contextLimit).toBeNull();
+    foldCodex(s, rec("response_item", { type: "message", role: "user", content: "plain string turn" }));
+    expect(s.userTurns).toEqual(["plain string turn"]);
+    foldCodex(s, rec("response_item", { type: "message", role: "assistant", content: [{ type: "output_text" }, null, 5] }));
+    expect(s.lastText).toBeNull();
   });
 });

@@ -39,7 +39,6 @@ export interface CodexState {
   skipBeforeOrdinal: number | null;
   /** Line counter, the ordinal fallback for records without one. */
   lineIndex: number;
-  cwd: string | null;
   version: string | null;
   originator: string | null;
   model: string | null;
@@ -81,7 +80,6 @@ export function initialCodex(): CodexState {
     meta: null,
     skipBeforeOrdinal: null,
     lineIndex: 0,
-    cwd: null,
     version: null,
     originator: null,
     model: null,
@@ -140,7 +138,6 @@ export function foldCodex(state: CodexState, line: string): CodexState {
     const meta = parseCodexMeta(line);
     if (!meta) return state;
     state.meta = meta;
-    state.cwd = meta.cwd;
     state.version = meta.cliVersion;
     state.originator = meta.originator;
     state.skipBeforeOrdinal = meta.subagentHistoryStartOrdinal;

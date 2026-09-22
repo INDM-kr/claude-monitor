@@ -28,41 +28,42 @@ export async function tailLines(
   const fh = await open(source, "r");
   try {
     let pos = fromOffset;
+    /** Start of the line currently being assembled = the next unconsumed byte. */
     let offset = fromOffset;
-    let leftover = Buffer.alloc(0);
-    let leftoverStart = pos;
+    /** Chunks of the partial line that began at `offset` (no LF seen yet). Kept
+     *  as a list and joined once per completed line: re-concatenating a growing
+     *  leftover with every chunk (and rescanning it) was quadratic in the line
+     *  length — Codex rollout records run to 10+ MB per line. */
+    const pending: Buffer[] = [];
 
     while (pos < toSize) {
       const want = Math.min(CHUNK, toSize - pos);
       const buf = Buffer.alloc(want);
       const { bytesRead } = await fh.read(buf, 0, want, pos);
       if (bytesRead === 0) break;
+      const chunk = buf.subarray(0, bytesRead);
+      const chunkStart = pos;
       pos += bytesRead;
 
-      const merged = leftover.length
-        ? Buffer.concat([leftover, buf.subarray(0, bytesRead)])
-        : buf.subarray(0, bytesRead);
-
       let cursor = 0;
-      while (cursor < merged.length) {
-        const nl = merged.indexOf(LF, cursor);
+      while (cursor < chunk.length) {
+        const nl = chunk.indexOf(LF, cursor);
         if (nl === -1) break;
-        const lineStr = merged.subarray(cursor, nl).toString("utf8");
-        const lineStart = leftoverStart + cursor;
-        const lineEnd = leftoverStart + nl + 1;
+        const tail = chunk.subarray(cursor, nl);
+        const lineBuf = pending.length > 0 ? Buffer.concat([...pending, tail]) : tail;
+        pending.length = 0;
+        const lineStr = lineBuf.toString("utf8");
         if (lineStr.trim().length > 0) {
           try {
             onLine(lineStr);
           } catch {
-            return lineStart; // partial/corrupt — retry from the start of this line
+            return offset; // partial/corrupt — retry from the start of this line
           }
         }
-        offset = lineEnd;
+        offset = chunkStart + nl + 1;
         cursor = nl + 1;
       }
-
-      leftover = cursor < merged.length ? Buffer.from(merged.subarray(cursor)) : Buffer.alloc(0);
-      leftoverStart = offset;
+      if (cursor < chunk.length) pending.push(Buffer.from(chunk.subarray(cursor)));
     }
     return offset;
   } finally {

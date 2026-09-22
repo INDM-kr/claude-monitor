@@ -4,54 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { AISessionAdapter, SessionRef, SessionSummary } from "@claude-monitor/core";
 import { LocalDataSource } from "../data-source/local";
+import { fakeAdapter, refFor, snapshotEnv, summaryFor } from "./helpers";
 
 const pexecFile = promisify(execFile);
-
-const KEYS = ["CM_ENABLE_CODEX", "CM_CODEX_DIR"];
-const saved: Record<string, string | undefined> = {};
-for (const k of KEYS) saved[k] = process.env[k];
-
-function refFor(adapterId: string, id: string, workspace: string): SessionRef {
-  return { id, adapterId, workspace, workspaceShort: workspace, projectKey: workspace, projectLabel: "ws", owner: "alice", source: join(workspace, "x.jsonl"), mtime: 0 };
-}
-
-function summaryFor(ref: SessionRef): SessionSummary {
-  return {
-    ref, status: "stop", lastTool: null, pendingSubagents: [], todo: null, lastText: null, firstPrompt: null,
-    userTurns: [], turnStartSec: null, turnTokens: null, endedTurn: false,
-    runner: ref.adapterId === "codex" ? "codex" : "unknown", model: null, mode: null, version: null,
-    context: null, pid: null, updatedAt: 0,
-  };
-}
-
-/** Adapter that serves fixed summaries — exercises LocalDataSource.enrich() through snapshot(). */
-function fakeAdapter(id: string, summaries: SessionSummary[]): AISessionAdapter {
-  return {
-    id,
-    displayName: id,
-    async *discover() {
-      for (const s of summaries) yield s.ref;
-    },
-    open(ref) {
-      const s = summaries.find((x) => x.ref.id === ref.id)!;
-      return { status: () => s.status, readIncremental: async () => s, close() {} };
-    },
-    async dispose() {},
-    onChange() {
-      return () => {};
-    },
-  };
-}
+const restoreEnv = snapshotEnv(["CM_ENABLE_CODEX", "CM_CODEX_DIR"]);
 
 describe("LocalDataSource — adapter registration (CM_ENABLE_CODEX)", () => {
-  afterEach(() => {
-    for (const k of KEYS) {
-      if (saved[k] == null) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-  });
+  afterEach(restoreEnv);
 
   it("registers the Codex adapter after Claude Code by default; CM_ENABLE_CODEX=0 leaves it out", () => {
     delete process.env.CM_ENABLE_CODEX;
@@ -84,7 +44,7 @@ describe("LocalDataSource.enrich — git remote grouping gate by adapter", () =>
   });
 
   it("codex and claude-code sessions in a git workspace group by the origin remote; cowork in the same dir does not", async () => {
-    const codex = summaryFor(refFor("codex", "c1", repo));
+    const codex = summaryFor(refFor("codex", "c1", repo), { runner: "codex" });
     const claude = summaryFor(refFor("claude-code", "a1", repo));
     const cowork = summaryFor(refFor("claude-cowork", "w1", repo));
     const ds = new LocalDataSource([fakeAdapter("codex", [codex]), fakeAdapter("claude-code", [claude]), fakeAdapter("claude-cowork", [cowork])]);

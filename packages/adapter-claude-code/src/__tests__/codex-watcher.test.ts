@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionRef } from "@claude-monitor/core";
 import { CodexWatcher, isIgnoredCodexPath, readFirstLine } from "../codex/watcher.js";
 import { CodexAdapter } from "../codex/adapter.js";
@@ -66,17 +66,45 @@ describe("CodexWatcher", () => {
     const NEW = "01a0c3c2-0000-7000-8000-000000000005";
     const newFile = join(day, `rollout-2026-09-21T20-30-00-${NEW}.jsonl`);
     await sleep(300);
-    await fs.writeFile(newFile, metaLine({ id: NEW, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }));
-    await sleep(500);
-    await fs.appendFile(newFile, JSON.stringify({ timestamp: "2026-09-21T11:14:23.000Z", ordinal: 1, type: "event_msg", payload: { type: "task_started" } }) + "\n");
-    await sleep(500);
-    await fs.rm(newFile);
-    await sleep(500);
+    try {
+      await fs.writeFile(newFile, metaLine({ id: NEW, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }));
+      await vi.waitFor(() => expect(events.some((e) => e.kind === "added" && e.id === NEW)).toBe(true), { timeout: 3000 });
+      await fs.appendFile(newFile, JSON.stringify({ timestamp: "2026-09-21T11:14:23.000Z", ordinal: 1, type: "event_msg", payload: { type: "task_started" } }) + "\n");
+      await vi.waitFor(() => expect(events.some((e) => e.kind === "changed" && e.id === NEW)).toBe(true), { timeout: 3000 });
+      await fs.rm(newFile);
+      await vi.waitFor(() => expect(events.some((e) => e.kind === "removed" && e.id === NEW)).toBe(true), { timeout: 3000 });
+      // A guardian thread that exists at start never surfaces (scan hides it, chokidar ignores initial files).
+      expect(events.some((e) => e.id === GUARD && e.kind !== "removed")).toBe(false);
+    } finally {
+      await w.stop();
+    }
+  });
+
+  it("a change to a guardian (hidden) thread emits nothing — the hidden verdict is cached as null", async () => {
+    const w = new CodexWatcher({ codexDir: root });
+    const ids: string[] = [];
+    w.on("event", (e) => ids.push(e.kind === "removed" ? e.refId : e.ref.id));
+    await w.start();
+    await sleep(300);
+    const guardFile = join(day, `rollout-2026-09-21T20-21-00-${GUARD}.jsonl`);
+    await fs.appendFile(guardFile, JSON.stringify({ timestamp: "2026-09-21T11:14:23.000Z", ordinal: 1, type: "event_msg", payload: { type: "task_started" } }) + "\n");
+    await sleep(400);
+    await fs.appendFile(guardFile, JSON.stringify({ timestamp: "2026-09-21T11:14:24.000Z", ordinal: 2, type: "event_msg", payload: { type: "task_complete" } }) + "\n");
+    await sleep(600);
     await w.stop();
-    expect(events.some((e) => e.kind === "added" && e.id === NEW)).toBe(true);
-    expect(events.some((e) => e.kind === "changed" && e.id === NEW)).toBe(true);
-    expect(events.some((e) => e.kind === "removed" && e.id === NEW)).toBe(true);
-    expect(events.some((e) => e.id === GUARD && e.kind !== "removed")).toBe(false);
+    expect(ids).not.toContain(GUARD);
+  });
+
+  it("a rollout file whose first line is not a session_meta is skipped; a thread_spawn meta without parent_thread_id is a root", async () => {
+    const BAD = "01a0c3c6-0000-7000-8000-000000000009";
+    const ORPHAN = "01a0c3c7-0000-7000-8000-00000000000a";
+    await fs.writeFile(join(day, `rollout-2026-09-21T20-14-22-${BAD}.jsonl`), JSON.stringify({ timestamp: "2026-09-21T11:14:22.358Z", ordinal: 0, type: "event_msg", payload: { type: "task_started" } }) + "\n");
+    await fs.writeFile(join(day, `rollout-2026-09-21T20-14-22-${ORPHAN}.jsonl`), metaLine({ id: ORPHAN, cwd: "/Users/alice/projects/demo", originator: "codex_work_desktop", cli_version: "0.154.0", source: { subagent: { thread_spawn: { depth: 1 } } } }));
+    const w = new CodexWatcher({ codexDir: root });
+    const refs: SessionRef[] = [];
+    for await (const r of w.scan()) refs.push(r);
+    expect(refs.map((r) => r.id)).not.toContain(BAD);
+    expect(refs.find((r) => r.id === ORPHAN)?.parentId).toBeUndefined();
   });
 
   it("CodexAdapter.discover yields the scan and open returns a reader", async () => {
@@ -171,7 +199,7 @@ describe("CodexWatcher — missing root, stray entries, partial first line, thre
     expect(seen.filter((e) => e.id === NEW)).toEqual([]);
     const completedAt = Date.now();
     await fs.appendFile(newFile, full.slice(40));
-    await sleep(500);
+    await vi.waitFor(() => expect(seen.some((e) => e.id === NEW)).toBe(true), { timeout: 3000 });
     await a.dispose();
     const mine = seen.filter((e) => e.id === NEW);
     expect(mine.length).toBeGreaterThan(0);
@@ -195,13 +223,13 @@ describe("CodexWatcher — missing root, stray entries, partial first line, thre
 });
 
 describe("watcher helpers — readFirstLine limits, isIgnoredCodexPath outside/nested", () => {
-  it("readFirstLine: null for an empty file or a first line over maxBytes; isIgnoredCodexPath: outside paths never ignored, nested hidden dirs ignored", async () => {
+  it("readFirstLine: null for an empty file, RangeError for a first line over maxBytes; isIgnoredCodexPath: outside paths never ignored, nested hidden dirs ignored", async () => {
     const dir = await fs.mkdtemp(join(tmpdir(), "cm-codex-fl2-"));
     const f = join(dir, "a.jsonl");
     await fs.writeFile(f, "");
     expect(await readFirstLine(f)).toBeNull();
     await fs.writeFile(f, "x".repeat(20) + "\nrest\n");
-    expect(await readFirstLine(f, 10)).toBeNull();
+    await expect(readFirstLine(f, 10)).rejects.toThrow(RangeError);
     expect(await readFirstLine(f, 21)).toBe("x".repeat(20));
     await fs.rm(dir, { recursive: true, force: true });
     expect(isIgnoredCodexPath("/Users/a/.codex/sessions", "/Users/a/.codex/other/.hidden")).toBe(false);
@@ -265,7 +293,7 @@ describe("CodexWatcher — review fixes: depth guard, cached identity, no initia
     await fs.writeFile(f, metaLine({ id: NEW, cwd: "/Users/alice/projects/demo", originator: "codex_exec", cli_version: "0.154.0", source: "exec" }));
     await sleep(500);
     await fs.appendFile(f, JSON.stringify({ timestamp: "2026-09-21T11:14:23.000Z", ordinal: 1, type: "event_msg", payload: { type: "task_started" } }) + "\n");
-    await sleep(500);
+    await vi.waitFor(() => expect(events.filter((e) => e.id === NEW).length).toBeGreaterThanOrEqual(2), { timeout: 3000 });
     await w.stop();
     const mine = events.filter((e) => e.id === NEW);
     expect(mine.length).toBeGreaterThanOrEqual(2);

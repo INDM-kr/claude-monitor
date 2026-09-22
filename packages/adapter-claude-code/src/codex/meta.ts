@@ -20,7 +20,6 @@ export interface CodexMeta {
   cliVersion: string | null;
   parentThreadId: string | null;
   kind: CodexThreadKind;
-  agentNickname: string | null;
   /** Sub-agent files open with a copy of the parent's history; records whose
    *  `ordinal` is below this belong to the parent and must be skipped. */
   subagentHistoryStartOrdinal: number | null;
@@ -48,19 +47,12 @@ export function parseCodexMeta(line: string): CodexMeta | null {
   if (typeof p.cwd !== "string" || !isAbsolute(p.cwd)) return null;
 
   let kind: CodexThreadKind = "user";
-  let agentNickname: string | null = null;
   const src = p.source;
   if (src != null && typeof src === "object") {
     const sub = (src as { subagent?: unknown }).subagent;
     const spawn =
       sub != null && typeof sub === "object" ? (sub as { thread_spawn?: unknown }).thread_spawn : undefined;
-    if (spawn != null && typeof spawn === "object") {
-      kind = "subagent";
-      const nick = (spawn as { agent_nickname?: unknown }).agent_nickname;
-      agentNickname = typeof nick === "string" ? nick : null;
-    } else {
-      kind = "hidden";
-    }
+    kind = spawn != null && typeof spawn === "object" ? "subagent" : "hidden";
   }
   const start = p.subagent_history_start_ordinal;
   return {
@@ -70,7 +62,6 @@ export function parseCodexMeta(line: string): CodexMeta | null {
     cliVersion: typeof p.cli_version === "string" ? p.cli_version : null,
     parentThreadId: typeof p.parent_thread_id === "string" && p.parent_thread_id ? p.parent_thread_id : null,
     kind,
-    agentNickname,
     subagentHistoryStartOrdinal: typeof start === "number" && Number.isFinite(start) ? start : null,
   };
 }

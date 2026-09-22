@@ -2,9 +2,9 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { AISessionAdapter, SessionRef, SessionSummary } from "@claude-monitor/core";
 import { LocalDataSource } from "../data-source/local";
 import { getProjectActivity } from "../project-activity";
+import { fakeAdapter, refFor, summaryFor } from "./helpers";
 
 const TS_A = "2026-09-21T11:14:27.100Z";
 const TS_B = "2026-09-21T11:20:06.000Z";
@@ -21,35 +21,6 @@ function rollout(id: string, ts: string, u: ReturnType<typeof usage>): string {
 }
 const claudeLine = { type: "assistant", timestamp: TS_C, message: { id: "m1", usage: { input_tokens: 5, cache_read_input_tokens: 7, cache_creation_input_tokens: 1, output_tokens: 2 }, content: [] } };
 
-function refFor(adapterId: string, id: string, workspace: string, source: string, parentId?: string): SessionRef {
-  const ref: SessionRef = { id, adapterId, workspace, workspaceShort: "w", projectKey: workspace, projectLabel: "w", owner: "alice", source, mtime: 0 };
-  if (parentId) ref.parentId = parentId;
-  return ref;
-}
-function summaryFor(ref: SessionRef): SessionSummary {
-  return {
-    ref, status: "stop", lastTool: null, pendingSubagents: [], todo: null, lastText: null, firstPrompt: null,
-    userTurns: [], turnStartSec: null, turnTokens: null, endedTurn: false, runner: "unknown",
-    model: null, mode: null, version: null, context: null, pid: null, updatedAt: 0,
-  };
-}
-function fakeAdapter(id: string, summaries: SessionSummary[]): AISessionAdapter {
-  return {
-    id,
-    displayName: id,
-    async *discover() {
-      for (const s of summaries) yield s.ref;
-    },
-    open(ref) {
-      const s = summaries.find((x) => x.ref.id === ref.id)!;
-      return { status: () => s.status, readIncremental: async () => s, close() {} };
-    },
-    async dispose() {},
-    onChange() {
-      return () => {};
-    },
-  };
-}
 const localDay = (ts: string): string => {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -76,11 +47,11 @@ describe("getProjectActivity — per-adapter timelines, one read per source", ()
     await fs.writeFile(b, rollout("B", TS_B, usage(3000, 0, 100))); // 3100
     await fs.writeFile(c, JSON.stringify(claudeLine) + "\n"); // 8
     const sessions = [
-      summaryFor(refFor("codex", "A", dir, a)),
-      summaryFor(refFor("codex", "B", dir, b, "A")),
-      summaryFor(refFor("codex", "A2", dir, a)), // same file as A → must not double count
+      summaryFor(refFor("codex", "A", dir, { source: a })),
+      summaryFor(refFor("codex", "B", dir, { source: b, parentId: "A" })),
+      summaryFor(refFor("codex", "A2", dir, { source: a })), // same file as A → must not double count
     ];
-    const claude = [summaryFor(refFor("claude-code", "C", dir, c))];
+    const claude = [summaryFor(refFor("claude-code", "C", dir, { source: c }))];
     ds = new LocalDataSource([fakeAdapter("codex", sessions), fakeAdapter("claude-code", claude)]);
     globalThis.__claudeMonitorDataSource = ds;
 

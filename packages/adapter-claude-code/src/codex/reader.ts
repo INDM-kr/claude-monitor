@@ -16,10 +16,10 @@ export interface CodexReaderOptions {
 }
 
 /** Lifecycle of a sub-agent child from its own turn events. */
-function agentStatusOf(s: CodexState, mtimeSec: number, now: number, thresholds: StatusThresholds): AgentStatus {
+function agentStatusOf(s: CodexState, activitySec: number, now: number, thresholds: StatusThresholds): AgentStatus {
   if (s.sawCancelled) return "cancelled";
   if (s.lastTurnClean) return "done";
-  return statusFromMtime(mtimeSec, now, thresholds) === "stop" ? "done" : "running";
+  return statusFromMtime(activitySec, now, thresholds) === "stop" ? "done" : "running";
 }
 
 /**

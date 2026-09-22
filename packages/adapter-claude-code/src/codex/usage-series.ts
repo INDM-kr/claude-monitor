@@ -1,8 +1,6 @@
 import { readFile } from "node:fs/promises";
-import type { UsagePoint } from "../usage-series.js";
+import { MAX_POINTS, type UsagePoint } from "../usage-series.js";
 import { foldCodex, initialCodex } from "./parser.js";
-
-const MAX_POINTS = 500;
 
 /**
  * Walk a rollout file with the same fold the reader uses, invoking `onToken`

@@ -21,12 +21,11 @@ describe("parseCodexMeta", () => {
       cliVersion: "0.154.0",
       parentThreadId: null,
       kind: "user",
-      agentNickname: null,
       subagentHistoryStartOrdinal: null,
     });
   });
 
-  it("parses a thread_spawn sub-agent (parent id, nickname, history start)", () => {
+  it("parses a thread_spawn sub-agent (parent id, history start)", () => {
     const m = parseCodexMeta(
       metaLine({
         id: CHILD, cwd: "/Users/alice/projects/demo", originator: "codex_work_desktop", cli_version: "0.154.0",
@@ -36,7 +35,6 @@ describe("parseCodexMeta", () => {
     );
     expect(m?.kind).toBe("subagent");
     expect(m?.parentThreadId).toBe(PARENT);
-    expect(m?.agentNickname).toBe("McClintock");
     expect(m?.subagentHistoryStartOrdinal).toBe(9);
   });
 
