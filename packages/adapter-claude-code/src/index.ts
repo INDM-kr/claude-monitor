@@ -3,6 +3,7 @@ export { ClaudeCodeReader } from "./reader.js";
 export { ProjectsWatcher } from "./watcher.js";
 export { fold, initial, pendingSubagents, summarizeTodos, usageContextTokens, type ParserState } from "./parser.js";
 export { readUsageSeries, readTokenTimeline, type UsagePoint } from "./usage-series.js";
+export { normalizeUsageRecord, reconcileUsageObservations, USAGE_PARSER_VERSION, USAGE_PROVIDER_ID } from "./usage-normalizer.js";
 export { CoworkAdapter, type CoworkAdapterOptions } from "./cowork/adapter.js";
 export { CoworkReader, type CoworkReaderOptions } from "./cowork/reader.js";
 export {
@@ -53,3 +54,12 @@ export {
 } from "./codex/meta.js";
 export { readCodexTokenTimeline, readCodexUsageSeries } from "./codex/usage-series.js";
 export { CODEX_ADAPTER_ID, CODEX_DISPLAY, defaultCodexDir } from "./codex/constants.js";
+export {
+  CODEX_USAGE_PARSER_VERSION,
+  initialCodexUsageState,
+  normalizeCodexUsageRecord,
+  type CodexActivity,
+  type CodexActivityEvent,
+  type CodexUsageState,
+  type CodexUsageStep,
+} from "./codex/usage-normalizer.js";

@@ -1,0 +1,9 @@
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { ThemeToggle } from './ThemeToggle';
+import '../local.css';
+const navigation=[['monitor','/','실시간 모니터','◉'],['overview','/overview','개요','◫'],['usage','/usage','사용량','▥'],['projects','/projects','프로젝트','▦'],['runs','/runs','실행','▷'],['work','/work','작업과 결과','✓'],['settings','/settings','설정','⚙']] as const;
+/** Shared frame for every screen. `flush` hands the content area to pages that lay out their own sticky header (the live monitor). */
+export function LocalShell({children,active,flush=false}:{children:ReactNode;active:string;flush?:boolean}){
+  return <div className="local-app"><a className="local-skip" href="#local-main">본문으로 이동</a><aside className="local-sidebar"><Link className="local-brand" href="/"><span className="local-mark">m<span>·</span></span><span>CLAUDE<br/><strong>Monitor</strong></span></Link><div className="local-workspace"><span className="local-avatar">P</span><span>개인 워크스페이스<small>이 기기의 기록</small></span></div><nav aria-label="주요 탐색">{navigation.map(([id,url,label,icon])=><Link key={id} href={url} aria-current={active===id?'page':undefined}><span aria-hidden="true">{icon}</span>{label}</Link>)}</nav><div className="local-sidebar-foot"><span className="local-dot"/>로컬 모니터<small>원격 계정 없이 사용</small></div></aside><div className="local-workspace-main"><header className="local-topbar"><span>개인 워크스페이스 <i>/</i> <b>{navigation.find(n=>n[0]===active)?.[2]}</b></span><span className="local-topbar-end"><span className="local-local-label">LOCAL · 이 기기</span><ThemeToggle/></span></header><main id="local-main" tabIndex={-1} className={flush?'local-main local-main--flush':'local-main'}>{children}</main>{!flush&&<footer className="local-footer">관측 토큰과 API 환산 비용 · 실제 청구액 및 업무 성과와 구분합니다.</footer>}</div></div>;
+}

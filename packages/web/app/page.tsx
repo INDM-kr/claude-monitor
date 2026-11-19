@@ -3,6 +3,7 @@ import { loadConfig } from "../lib/config";
 import { filterWithVisibleChildren, parseStatuses } from "../lib/filter";
 import type { ProjectGroupData } from "../lib/group";
 import { Dashboard } from "./_components/Dashboard";
+import { LocalShell } from "./_components/LocalShell";
 
 export const dynamic = "force-dynamic";
 
@@ -33,5 +34,9 @@ export default async function Page({
   // Dashboard groups roots and nests children client-side. Pass the resolved
   // filter so the live (SSE) view applies the SAME maxAge/glob the server used
   // here — otherwise the live view drifts from this refresh snapshot.
-  return <Dashboard initial={summaries} filter={{ maxAgeHours: maxAge, all, filterGlob }} />;
+  return (
+    <LocalShell active="monitor" flush>
+      <Dashboard initial={summaries} filter={{ maxAgeHours: maxAge, all, filterGlob }} />
+    </LocalShell>
+  );
 }

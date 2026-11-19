@@ -1,0 +1,26 @@
+{
+  "name": "@claude-monitor/collector",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./storage": { "types": "./dist/storage.d.ts", "default": "./dist/storage.js" },
+    "./runtime-token": { "types": "./dist/runtime-token.d.ts", "default": "./dist/runtime-token.js" }
+  },
+  "engines": { "node": ">=24.11.0 <25", "pnpm": ">=10 <11" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "pnpm build && vitest run" },
+  "dependencies": {
+    "@claude-monitor/adapter-claude-code": "workspace:*",
+    "@claude-monitor/core": "workspace:*",
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeRemote } from "../git-remote";
+import { canonicalRemote, normalizeRemote } from "../git-remote";
 
 describe("normalizeRemote", () => {
   it("https form", () => {
@@ -39,5 +39,14 @@ describe("normalizeRemote", () => {
   it("empty / unrecognizable → null", () => {
     expect(normalizeRemote("")).toBeNull();
     expect(normalizeRemote("not a url")).toBeNull();
+  });
+});
+
+describe("canonicalRemote", () => {
+  it("replaces an SSH alias host with its real host so it matches the https clone", async () => {
+    const lookup = async (alias: string) => (alias === "github-work" ? "github.com" : null);
+    expect(await canonicalRemote("git@github-work:nexist/claude-monitor.git", lookup)).toEqual({ key: "git:github.com/nexist/claude-monitor", label: "claude-monitor" });
+    expect((await canonicalRemote("https://github.com/nexist/claude-monitor.git", lookup))?.key).toBe("git:github.com/nexist/claude-monitor");
+    expect(await canonicalRemote("not a remote", lookup)).toBeNull();
   });
 });

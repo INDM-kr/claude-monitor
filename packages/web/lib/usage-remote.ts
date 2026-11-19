@@ -77,6 +77,7 @@ let cache: { at: number; data: OAuthUsage | null } | null = null;
 /** Fetch authoritative usage from the OAuth endpoint. Cached 5min (incl. null,
  *  to avoid hammering a rate-limited endpoint). null → caller falls back. */
 export async function fetchOAuthUsage(): Promise<OAuthUsage | null> {
+  if (process.env.CM_REMOTE_USAGE_ENABLED !== "true") return null;
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.data;
   const cfg = loadConfig();
   let data: OAuthUsage | null = null;

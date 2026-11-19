@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { LocalShell } from "../../_components/LocalShell";
 import { getProjectActivity } from "../../../lib/project-activity";
 import { getDataSource } from "../../../lib/data-source/local";
 import { ProjectHeatmap } from "../../_components/ProjectHeatmap";
@@ -18,11 +19,12 @@ export default async function ProjectDetail({ params }: { params: { key: string 
     .sort((a, b) => b.ref.mtime - a.ref.mtime);
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <LocalShell active="monitor" flush>
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <Link href="/" className="text-xs text-cyan-400 hover:underline">{t("detail.back")}</Link>
 
       <header className="space-y-1">
-        <h1 className="break-all font-mono text-base text-zinc-100">📁 {activity.projectLabel}</h1>
+        <h1 className="break-all text-base font-semibold text-zinc-100">📁 {activity.projectLabel}</h1>
         <div className="text-xs text-zinc-500">
           {activity.startSec != null && (
             <span>
@@ -54,13 +56,14 @@ export default async function ProjectDetail({ params }: { params: { key: string 
                   {s.userTurns?.[s.userTurns.length - 1] ?? s.firstPrompt ?? s.lastText ?? "—"}
                 </span>
                 {s.totalTokens != null && s.totalTokens > 0 && (
-                  <span className="shrink-0 font-mono text-[11px] text-zinc-600">Σ {fmtCount(s.totalTokens)}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-zinc-600" title={t("card.sessionTokens")}>Σ {fmtCount(s.totalTokens)}</span>
                 )}
               </Link>
             </li>
           ))}
         </ul>
       </section>
-    </main>
+    </div>
+    </LocalShell>
   );
 }

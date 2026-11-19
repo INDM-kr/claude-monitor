@@ -128,8 +128,8 @@ export function Dashboard({
   const aggregates = useMemo(() => aggregateProjects(visible), [visible]);
 
   return (
-    <main className="max-w-7xl mx-auto px-4 py-6">
-      <header ref={headerRef} className="sticky top-0 z-40 -mx-4 -mt-6 mb-6 box-border space-y-3 border-b border-border-subtle bg-[rgb(12_17_23_/_50%)] px-4 pt-6 pb-4 backdrop-blur-[4px]">
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <header ref={headerRef} className="sticky top-0 z-40 -mx-4 -mt-6 mb-6 box-border space-y-3 border-b border-border-subtle bg-bg/80 px-4 pt-6 pb-4 backdrop-blur-[4px]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-2.5">
             <span className="text-status-live">◐</span>
@@ -171,7 +171,7 @@ export function Dashboard({
         </div>
       )}
 
-      <footer className="sticky bottom-0 z-40 -mx-4 -mb-6 mt-6 box-border border-t border-border-subtle bg-[rgb(12_17_23_/_50%)] px-4 pt-4 pb-6 text-xs text-zinc-400 backdrop-blur-[4px]">
+      <footer className="sticky bottom-0 z-40 -mx-4 -mb-6 mt-6 box-border border-t border-border-subtle bg-bg/80 px-4 pt-4 pb-6 text-xs text-zinc-400 backdrop-blur-[4px]">
         {t("app.legend")}:{" "}
         <span className="text-status-live">● {t("app.legendLive")}</span>{" "}
         <span className="text-status-waiting">◐ {t("app.legendWaiting")}</span>{" "}
@@ -179,6 +179,6 @@ export function Dashboard({
         <span className="text-zinc-500">· {t("app.legendStop")}</span>
         <span className="ml-3 text-zinc-500">— ETA·총 남은시간 표시 안 함</span>
       </footer>
-    </main>
+    </div>
   );
 }

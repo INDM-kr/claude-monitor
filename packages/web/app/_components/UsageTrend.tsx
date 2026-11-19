@@ -15,7 +15,7 @@ export function UsageTrend({ points }: { points: UsagePoint[] }) {
   const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${sx(p.ts).toFixed(1)},${sy(p.tokens).toFixed(1)}`).join(" ");
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-lg h-20">
-      <path d={d} fill="none" stroke="#34d399" strokeWidth={1.5} />
+      <path d={d} fill="none" stroke="rgb(var(--c-emerald-400))" strokeWidth={1.5} />
     </svg>
   );
 }

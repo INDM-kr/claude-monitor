@@ -20,6 +20,7 @@ import { loadConfig } from "../config";
 import { probeProcesses } from "../process-probe";
 import { remoteProject } from "../git-remote";
 import { findProjectRoot } from "../project-root";
+import { CollectorProjectMap, mappedProject, type ProjectMapSource } from "../project-mapping";
 
 const DEBOUNCE_MS = 150;
 
@@ -43,8 +44,10 @@ export class LocalDataSource implements DataSource {
   // after the process exits (else it falls back to the 200k default). In-memory:
   // reset on server restart.
   private readonly ctxLimits = new Map<string, number>();
+  private readonly projects: ProjectMapSource;
 
-  constructor(adapters?: AISessionAdapter[]) {
+  constructor(adapters?: AISessionAdapter[], projects: ProjectMapSource = new CollectorProjectMap()) {
+    this.projects = projects;
     const cfg = loadConfig();
     if (adapters && adapters.length > 0) {
       this._adapters = adapters;
@@ -88,6 +91,7 @@ export class LocalDataSource implements DataSource {
 
   async snapshot(): Promise<SessionSummary[]> {
     await this.ensureDiscovered();
+    await this.refreshProjects();
     const raw = [...this.entries.values()]
       .map((e) => e.lastSummary)
       .filter((s): s is SessionSummary => Boolean(s));
@@ -116,6 +120,25 @@ export class LocalDataSource implements DataSource {
     await Promise.all(this._adapters.map((a) => a.dispose()));
   }
 
+  /** After a change on /projects: regroup the monitor now instead of on the next stale read. */
+  async applyProjectChanges(): Promise<void> {
+    await this.refreshProjects(true);
+  }
+
+  private async refreshProjects(force = false): Promise<void> {
+    if (!(await this.projects.refresh(force))) return;
+    // Mapping changed (merge/rename, or git identified a repository): push only regrouped sessions to open dashboards.
+    for (const entry of this.entries.values()) {
+      const before = entry.lastSummary;
+      if (!before) continue;
+      const after = await this.enrich(before);
+      entry.lastSummary = after;
+      if (after.ref.projectKey !== before.ref.projectKey || after.ref.projectLabel !== before.ref.projectLabel) {
+        getHub().publish({ kind: "summary", data: after });
+      }
+    }
+  }
+
   private async enrich(summary: SessionSummary): Promise<SessionSummary> {
     // Group by the repo's origin remote URL when resolvable (unifies worktrees /
     // clones of the same repo regardless of path). cwd gone / no remote → keep
@@ -136,6 +159,11 @@ export class LocalDataSource implements DataSource {
       if (root && root.key !== summary.ref.projectKey) {
         ref = { ...summary.ref, projectKey: root.key, projectLabel: root.label };
       }
+    }
+    // The ledger mapping managed on /projects wins, so merges and renames show the same way on both screens.
+    if (hasRepoWorkspace) {
+      const mapped = mappedProject(this.projects.current(), summary.ref.workspace, remote?.key ?? null);
+      if (mapped) ref = { ...ref, projectKey: mapped.key, projectLabel: mapped.label };
     }
 
     // The ps probe (and ctxLimits) are keyed by the bare session id. Only Claude
@@ -229,6 +257,7 @@ export class LocalDataSource implements DataSource {
     entry.flushTimer = setTimeout(async () => {
       entry.flushTimer = null;
       try {
+        await this.refreshProjects();
         const summary = await entry.reader.readIncremental();
         const enriched = await this.enrich(summary);
         entry.lastSummary = enriched;

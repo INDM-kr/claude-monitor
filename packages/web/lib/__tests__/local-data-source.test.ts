@@ -74,3 +74,64 @@ describe("LocalDataSource.enrich — git remote grouping gate by adapter", () =>
     }
   });
 });
+
+describe("LocalDataSource — ledger project mapping (/projects)", () => {
+  const map = {
+    workspaces: {
+      "/work/conductor/workspaces/baro/monaco": { key: "git:github.com/acme/baro", label: "Baro" },
+      "/work/notes": { key: "project:p-notes", label: "Notes" },
+    },
+    identities: { "git:github.com/acme/demo": { key: "project:p-demo", label: "Demo App" } },
+  };
+  function source(initial: typeof map | null) {
+    let current = initial, changed = false;
+    return {
+      current: () => current,
+      refresh: async () => { const was = changed; changed = false; return was; },
+      set(next: typeof map) { current = next; changed = true; },
+    };
+  }
+
+  it("groups mapped folders under their ledger project and leaves unmapped and cowork sessions automatic", async () => {
+    const monaco = summaryFor(refFor("claude-code", "a1", "/work/conductor/workspaces/baro/monaco"));
+    const notes = summaryFor(refFor("codex", "c1", "/work/notes/"));
+    const other = summaryFor(refFor("claude-code", "a2", "/work/other"));
+    const cowork = summaryFor(refFor("claude-cowork", "w1", "/work/notes"));
+    const ds = new LocalDataSource([fakeAdapter("claude-code", [monaco, other]), fakeAdapter("codex", [notes]), fakeAdapter("claude-cowork", [cowork])], source(map));
+    try {
+      const byId = new Map((await ds.snapshot()).map((s) => [s.ref.id, s.ref]));
+      expect([byId.get("a1")?.projectKey, byId.get("a1")?.projectLabel]).toEqual(["git:github.com/acme/baro", "Baro"]);
+      expect([byId.get("c1")?.projectKey, byId.get("c1")?.projectLabel]).toEqual(["project:p-notes", "Notes"]);
+      expect(byId.get("a2")?.projectKey).toBe("/work/other");
+      expect(byId.get("w1")?.projectKey).toBe("/work/notes");
+    } finally {
+      await ds.dispose();
+    }
+  });
+
+  it("maps a git repository the ledger knows by identity, and pushes only regrouped sessions when the mapping changes", async () => {
+    const base = await fs.mkdtemp(join(tmpdir(), "cm-map-"));
+    const repo = join(base, "repo");
+    await fs.mkdir(repo);
+    await pexecFile("git", ["init", "-q"], { cwd: repo });
+    await pexecFile("git", ["remote", "add", "origin", "git@github.com:acme/demo.git"], { cwd: repo });
+    const inRepo = summaryFor(refFor("claude-code", "a1", repo));
+    const monaco = summaryFor(refFor("claude-code", "a2", "/work/conductor/workspaces/baro/monaco"));
+    const projects = source(map);
+    const ds = new LocalDataSource([fakeAdapter("claude-code", [inRepo, monaco])], projects);
+    const { getHub } = await import("../sse/hub");
+    const pushed: string[] = [];
+    const off = getHub().subscribe((e) => { if (e.kind === "summary") pushed.push(`${e.data.ref.id}:${e.data.ref.projectLabel}`); });
+    try {
+      expect((await ds.snapshot()).find((s) => s.ref.id === "a1")?.ref).toMatchObject({ projectKey: "project:p-demo", projectLabel: "Demo App" });
+      pushed.length = 0;
+      projects.set({ ...map, workspaces: { ...map.workspaces, "/work/conductor/workspaces/baro/monaco": { key: "git:github.com/acme/baro", label: "Baro Renamed" } } });
+      await ds.applyProjectChanges();
+      expect(pushed).toEqual(["a2:Baro Renamed"]);
+    } finally {
+      off();
+      await ds.dispose();
+      await fs.rm(base, { recursive: true, force: true });
+    }
+  });
+});

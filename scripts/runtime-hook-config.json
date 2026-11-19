@@ -1,0 +1,7 @@
+{
+  "endpointPath": "/api/runtime/events",
+  "timeoutMs": 900,
+  "maxInputBytes": 1048576,
+  "maxAncestors": 8,
+  "events": ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Notification", "Elicitation", "ElicitationResult", "Stop", "StopFailure", "SessionEnd", "SubagentStart", "SubagentStop"]
+}

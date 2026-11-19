@@ -2,13 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
-
 html, body {
-  background: #0d1117;
-  color: #e6edf3;
+  background: rgb(var(--c-bg));
+  color: rgb(var(--c-ink));
 }
 
 @keyframes pulseDot {
@@ -18,4 +14,11 @@ html, body {
 
 .live-dot {
   animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+/* Placeholders must not read as entered values (e.g. the project glob filter). */
+input::placeholder,
+textarea::placeholder {
+  color: rgb(var(--c-faint));
+  opacity: 1;
 }
