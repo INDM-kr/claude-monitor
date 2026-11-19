@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "meaning": "Golden expectation consistency only; the production L1 normalizer is not implemented or tested by these fixtures yet.",
+  "observed": [
+    {
+      "file": "observed-repeat.jsonl",
+      "acceptedIndexes": [
+        1
+      ],
+      "expectedRequests": 1,
+      "expectedTokens": 36062,
+      "notes": "Same request/message, equal full usage, distinct content-block record UUIDs."
+    },
+    {
+      "file": "observed-revision.jsonl",
+      "acceptedIndexes": [
+        1
+      ],
+      "expectedRequests": 1,
+      "expectedTokens": 23211,
+      "notes": "Output changes from 7 to 160; retain last snapshot."
+    },
+    {
+      "file": "observed-child.jsonl",
+      "acceptedIndexes": [
+        0
+      ],
+      "expectedRequests": 1,
+      "expectedTokens": 23464,
+      "source": "session-example/subagents/agent-child.jsonl",
+      "parentSessionId": "session-example"
+    },
+    {
+      "file": "observed-cache-mismatch.jsonl",
+      "acceptedIndexes": [
+        0
+      ],
+      "expectedRequests": 1,
+      "expectedTokens": 123949,
+      "costEligible": false,
+      "notes": "Cache total 2771 vs TTL split 1180. Tokens remain known; cost is not estimated."
+    }
+  ],
+  "syntheticCases": "synthetic-cases.json",
+  "stream": {
+    "parts": [
+      "synthetic-stream.part1.txt",
+      "synthetic-stream.part2.txt"
+    ],
+    "afterFirst": {
+      "validRecords": 1,
+      "tokens": 15,
+      "malformedLines": 1,
+      "pendingPartial": true
+    },
+    "afterSecond": {
+      "validRecords": 2,
+      "tokens": 40,
+      "malformedLines": 1,
+      "pendingPartial": false
+    }
+  },
+  "ingestionAcceptance": [
+    "Replay same source -> same canonical keys and totals.",
+    "Crash before transaction commit -> neither usage nor checkpoint advanced.",
+    "Crash after commit -> both persisted; replay remains idempotent.",
+    "Truncate/rotate -> new generation and full replay; retained usage remains unless explicitly deleted.",
+    "Malformed newline-terminated record -> bounded diagnostic and skip; trailing partial bytes wait for append."
+  ]
+}

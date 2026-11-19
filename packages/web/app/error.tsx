@@ -1,10 +1,12 @@
 "use client";
 
 import { t } from "../lib/i18n/t";
+import { LocalShell } from "./_components/LocalShell";
 
 export default function Error({ reset }: { error: Error; reset: () => void }) {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10 space-y-3 text-center">
+    <LocalShell active="" flush>
+    <div className="max-w-3xl mx-auto px-4 py-10 space-y-3 text-center">
       <h1 className="text-zinc-200">{t("errors.title")}</h1>
       <button
         type="button"
@@ -13,6 +15,7 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
       >
         {t("errors.retry")}
       </button>
-    </main>
+    </div>
+    </LocalShell>
   );
 }

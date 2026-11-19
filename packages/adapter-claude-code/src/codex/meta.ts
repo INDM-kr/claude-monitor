@@ -32,12 +32,18 @@ interface RawMeta {
 
 /** Parse the first line of a rollout file. Null unless it is a usable `session_meta`. */
 export function parseCodexMeta(line: string): CodexMeta | null {
-  let obj: RawMeta;
+  let obj: unknown;
   try {
-    obj = JSON.parse(line) as RawMeta;
+    obj = JSON.parse(line);
   } catch {
     return null;
   }
+  return parseCodexMetaRecord(obj);
+}
+
+/** Same as {@link parseCodexMeta} for an already-parsed record (the usage ledger reads whole lines itself). */
+export function parseCodexMetaRecord(record: unknown): CodexMeta | null {
+  const obj = record as RawMeta | null;
   if (obj?.type !== "session_meta" || obj.payload == null || typeof obj.payload !== "object") return null;
   const p = obj.payload;
   if (typeof p.id !== "string" || !p.id) return null;

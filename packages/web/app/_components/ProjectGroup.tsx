@@ -28,10 +28,10 @@ export function ProjectGroup({
   const showMeta = startSec != null || totalTokens > 0;
   return (
     <section className="mb-4">
-      <div className="sticky top-[var(--cm-header-h,102px)] z-30 -mx-4 box-border flex w-[calc(100%+2rem)] items-center gap-2 bg-[rgb(13_17_23_/_92%)] px-4 py-1.5 backdrop-blur-[4px] relative after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border-subtle after:content-['']">
+      <div className="sticky top-[var(--cm-header-h,102px)] z-30 -mx-4 box-border flex w-[calc(100%+2rem)] items-center gap-2 bg-bg/[0.92] px-4 py-1.5 backdrop-blur-[4px] relative after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border-subtle after:content-['']">
         <button type="button" onClick={toggle} className="flex min-w-0 flex-1 items-center gap-2 text-left text-zinc-300 hover:text-zinc-100">
           <span className={clsx("text-[11px] text-zinc-600 transition-transform", collapsed && "-rotate-90")}>▾</span>
-          <span className="truncate font-mono text-[12.5px] text-zinc-100">📁 {projectLabel}</span>
+          <span className="truncate text-[13px] font-semibold text-zinc-100">📁 {projectLabel}</span>
           <span className="shrink-0 rounded-full border border-border bg-bg-soft px-2 py-px text-[11px] tabular-nums text-zinc-500">
             {sessions.length}
           </span>
@@ -40,7 +40,7 @@ export function ProjectGroup({
               below sm so a narrow screen keeps the room for the project name (the same
               numbers are on the detail page). */}
           {showMeta && (
-            <span className="hidden shrink-0 whitespace-nowrap text-[11px] tabular-nums text-zinc-400 sm:inline">
+            <span className="hidden shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums text-zinc-400 sm:inline">
               {startSec != null && (
                 <>
                   {t("project.since")} {fmtDate(startSec)}

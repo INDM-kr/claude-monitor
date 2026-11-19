@@ -1,6 +1,6 @@
 export const ko = {
   app: {
-    title: "Claude Code 세션 모니터",
+    title: "실시간 모니터",
     legend: "범례",
     legendLive: "작업 중",
     legendWaiting: "입력 대기",
@@ -39,7 +39,7 @@ export const ko = {
     request: "내 요청",
     history: "요청 히스토리",
     detail: "상세",
-    sessionTokens: "이 세션 누적 토큰",
+    sessionTokens: "이 세션 누적 토큰 (캐시 읽기 제외)",
     responseToggle: "클릭: 이 요청에 대한 응답 펼침",
     waitingInput: "사용자 입력 대기",
     expand: "클릭하면 전체 요청·작업·서브에이전트 펼침",
@@ -67,7 +67,7 @@ export const ko = {
     statusStop: "stop",
   },
   detail: {
-    back: "← 대시보드",
+    back: "← 실시간 모니터",
     source: "소스",
     usageTrend: "컨텍스트 추이",
     noUsage: "usage 데이터 없음",
@@ -75,12 +75,12 @@ export const ko = {
     subagents: "대기 sub-agent",
     lastMessage: "마지막 메시지",
     requests: "내 요청 · 응답",
-    sessionTokens: "세션 누적 토큰",
+    sessionTokens: "세션 누적 토큰 (캐시 읽기 제외)",
   },
   project: {
     since: "시작",
     sessions: "세션",
-    totalTokens: "누적 토큰",
+    totalTokens: "누적 토큰 (캐시 읽기 제외)",
     activity: "활동 (토큰 사용량 잔디 · 요일/시간 패턴)",
     sessionList: "세션 목록",
     detail: "프로젝트",

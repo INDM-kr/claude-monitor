@@ -1,10 +1,14 @@
 # claude-monitor
 
-한 대의 Mac에서 실행 중인 모든 Claude Code 세션을 한곳에서 보는 읽기 전용 대시보드.
+한 대의 Mac에서 프로젝트별 AI 사용량, 실행 신호, 작업과 결과를 확인하는 로컬 모니터.
 
 ## 1. claude-monitor란?
 
-claude-monitor는 한 대의 Mac에서 실행 중인 모든 Claude Code AI 코딩 에이전트 세션을 한곳에서 보여 주는 **읽기 전용(read-only) 대시보드**입니다. `~/.claude/projects/`에 쌓이는 세션 트랜스크립트(JSONL)를 읽어 각 세션의 상태, 최근 요청, 사용 모델/모드, 컨텍스트 사용량, 현재 진행 중인 도구 호출, 하위 에이전트 트리, 토큰 사용량 등을 실시간으로 보여 줍니다. 트랜스크립트 파일은 **절대 수정하지 않습니다**. 유일한 예외는 세션 종료(Kill) 액션으로, 사용자가 명시적으로 누른 경우에만 해당 프로세스를 종료합니다. 그 외 모든 동작은 관찰 전용입니다.
+claude-monitor는 로컬 Claude Code 기록에서 프로젝트별 기간 사용량을 집계하고, 선택적인 hook으로 실행·대기 신호를 관측합니다. 작업 이름과 여러 실행을 연결하고 결과물·사용자 완료 확인을 남길 수 있습니다. 원본 트랜스크립트는 수정하지 않습니다. 로컬 원장과 사용자가 입력한 작업 기록만 관리합니다.
+
+첫 화면 실시간 모니터(`/`)에는 최근 요청·컨텍스트·도구·하위 에이전트와 명시적인 종료(Kill) 기능이 유지됩니다. 새 개요·리포트는 처리 토큰과 API 환산 비용을 제공하며, 실제 청구액·구독 한도·업무 성과와 구분합니다.
+
+첫 화면이자 주 메뉴 첫 항목인 **실시간 모니터**(`/`)는 세션·메시지·도구·하위 실행을 로그 변경에 따라 SSE로 갱신합니다(예전 `/sessions` 주소는 쿼리를 유지한 채 `/`로 이동). `/overview`에서 오늘 사용량을 보고, `/usage`에서 기간별 리포트, `/projects`에서 프로젝트 매핑, `/runs`에서 hook 기반 실행·대기 근거, `/work`에서 작업과 결과, `/settings`에서 백업·진단을 확인합니다. 모든 화면은 같은 사이드바·글꼴(UI 산세리프, 숫자·ID·로그 모노)을 쓰며, 상단의 `자동/다크/라이트`로 화면 모드를 바꿉니다(자동은 macOS 설정을 따르고 선택은 이 브라우저에 기억). 새 리포트·실행 화면의 조회 간격은 2초이며, hook 미연결 상태는 미확인으로 표시합니다. 기능별 연결 방법과 남은 실사용 검증은 아래 [개인용 로컬 모니터](#개인용-로컬-모니터-l1l3)를 참고하세요.
 
 ---
 
@@ -26,7 +30,7 @@ bash scripts/install.sh
 
 설치 스크립트는 Next.js 웹 UI를 빌드한 뒤 실행 스크립트를 설치합니다. 스크립트는 **멱등(idempotent)** 하므로 다시 실행해도 안전합니다(재실행 시 `ClaudeMonitor.app`과 실행 스크립트에 박힌 저장소 경로를 덮어씁니다).
 
-**사전 요구사항(웹 UI):** node `>=18.17`, pnpm `>=8`. 둘 중 하나라도 없으면 설치 스크립트는 웹 UI 설치를 **조용히 건너뜁니다**(경고만 출력). CLI만 설치하려면 다음을 사용하세요.
+**사전 요구사항(웹 UI):** Node `>=24.11.0 <25`, pnpm `>=10 <11`. 설치·시작 시 버전을 검사하고 지원 범위를 벗어나면 원인을 출력하고 중단합니다. 웹 설치의 런타임 검사는 기존 설치 파일을 바꾸기 전에 실행합니다. CLI만 설치하려면 다음을 사용하세요.
 
 ```bash
 SKIP_WEB=1 bash scripts/install.sh
@@ -39,7 +43,8 @@ SKIP_WEB=1 bash scripts/install.sh
 - **macOS** — `sips` · `iconutil` · `osacompile` · `Terminal.app` (시스템 기본 제공)
 - **`jq`** (버전 무관) — CLI가 JSONL 파싱에 사용
 - **`watch`** — `.app` 런처에서만 필요 (`brew install watch`)
-- **웹 UI** — Node 18+ 와 pnpm 8+ (`brew install node pnpm` 또는 `corepack enable`)
+- **웹 UI** — Node 24.11 이상 24.x, pnpm 10.x. `node -v`, `pnpm -v`로 확인합니다.
+- **SQLite native 모듈** — 현재 Mac arm64에서 `better-sqlite3@13.0.3`의 node-gyp 설치를 확인했습니다. 소스 빌드 환경에는 Xcode Command Line Tools와 Python이 필요합니다.
 - **아이콘 재빌드 시에만** — `rsvg-convert` (`brew install librsvg`) + ImageMagick (`brew install imagemagick`)
 
 ### 웹 UI 실행
@@ -50,13 +55,17 @@ SKIP_WEB=1 bash scripts/install.sh
 $HOME/bin/claude-monitor-web
 ```
 
-개발 환경에서는 저장소 루트에서 다음 중 하나를 사용합니다.
+저장소에서 처음 실행할 때는 의존성과 패키지를 먼저 빌드합니다.
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm build
 pnpm start
-# 또는
-pnpm --filter @claude-monitor/web start
 ```
+
+개발 모드는 `pnpm dev`입니다. 이 명령은 core·adapter·collector를 먼저 빌드한 뒤 개발 서버를 시작합니다. 공유 패키지의 TypeScript 코드를 수정했다면 다시 빌드하고 개발 서버를 재시작합니다. 화면/API의 개발 재로딩은 같은 collector worker를 유지합니다.
+
+`pnpm start`와 설치된 실행기는 `scripts/web.mjs`를 통해 HTTP 서버와 collector를 시작·종료합니다. `next start`를 직접 실행하면 이 수명 관리 경계를 거치지 않으므로 사용하지 않습니다. 사용자 정의 서버는 현재 로컬 실행 방식이며 Next.js standalone 배포는 구성하지 않았습니다.
 
 ### 접속 URL
 
@@ -74,7 +83,7 @@ http://127.0.0.1:11314
 WITH_LAUNCHAGENT=1 bash scripts/install.sh
 ```
 
-이 경우 `$HOME/Library/LaunchAgents/com.indm.claude-monitor-web.plist`가 설치되고, 로그는 `$HOME/Library/Logs/claude-monitor-web.log`에 기록됩니다.
+이 경우 `$HOME/Library/LaunchAgents/com.indm.claude-monitor-web.plist`가 설치되고, 로그는 `$HOME/Library/Logs/claude-monitor-web.log`에 기록됩니다. launchd는 셸 설정을 읽지 않으므로 설치 시점에 확인한 node·pnpm 폴더를 plist의 `PATH`에 기록합니다. nvm 등으로 Node 버전을 바꾼 뒤에는 이 명령을 다시 실행하세요.
 
 ### CLI 실행
 
@@ -116,47 +125,63 @@ bash scripts/uninstall.sh
 
 ## 3. 설정 (환경변수)
 
-웹 UI의 동작은 환경변수로 조정합니다. `start-web.sh`는 `PORT`, `HOSTNAME`, `CLAUDE_PROJECTS_DIR`를 노출하며, 나머지 `CM_*` 변수는 서버 설정 로딩 시 읽습니다.
+웹 UI의 동작은 환경변수로 조정합니다. `PORT`, `HOSTNAME`은 공통 서버 진입점에서 읽고 기본값은 `scripts/web-config.json`에 둡니다. `CLAUDE_PROJECTS_DIR`와 `CM_*` 변수는 해당 설정 로딩 시 읽습니다. collector 설정을 바꾼 뒤에는 서버를 재시작합니다.
 
 | 변수 | 역할 | 기본값 |
 |---|---|---|
 | `CM_ACTIVE_THRESHOLD_SEC` | 세션 나이가 이 값보다 작으면 `live`로 분류 | `60` (초) |
 | `CM_RECENT_THRESHOLD_SEC` | 나이가 이 값보다 작으면 `idle`, 그 이상이면 `stop`으로 분류. `waiting` 상태도 이 임계값 안에서만 적용 | `600` (초, 10분) |
-| `CM_MAX_AGE_HOURS` | `/`와 `/api/sessions`가 반환하는 세션 나이 컷오프. 명시적으로 요청하지 않으면 이보다 오래된 세션은 제외 | `24` (시간) |
-| `CM_BEARER_TOKEN` | API·페이지 요청 보호용 인증 토큰. 설정하면 모든 요청에 `Authorization: Bearer <token>` 헤더 필요 | 미설정 (null) |
+| `CM_MAX_AGE_HOURS` | 실시간 모니터(`/`)와 `/api/sessions`가 반환하는 세션 나이 컷오프. 새 원장 리포트에는 적용하지 않음 | `24` (시간) |
+| `CM_BEARER_TOKEN` | health를 제외한 조회·관리 API 인증. 설정하면 `Authorization: Bearer <token>` 헤더 필요 | 미설정 (null) |
 | `CM_BLOCK_TOKEN_LIMIT` | 토큰 사용량 게이지의 5시간 블록 분모(계정 블록 한도). 양의 정수만 유효 | 미설정 → 최근 피크값 사용 |
 | `CM_WEEKLY_TOKEN_LIMIT` | 토큰 사용량 게이지의 7일 분모(주간 한도). 양의 정수만 유효 | 미설정 → 최근 피크값 사용 |
-| `PORT` | 웹 UI HTTP 포트(`start-web.sh`에서 노출하는 의도된 조정 지점) | `11314` |
-| `HOSTNAME` | 웹 UI 바인딩 주소. LAN에 노출하려면 `0.0.0.0`으로 설정하되 반드시 `CM_BEARER_TOKEN`과 함께 사용 | `127.0.0.1` (localhost 전용) |
+| `PORT` | 웹 UI HTTP 포트(`pnpm dev/start`, 설치 실행기 공통) | `11314` |
+| `HOSTNAME` | 웹 UI 바인딩 주소. L1–L3는 loopback 개인용이며 관리 쓰기는 loopback Host만 허용 | `127.0.0.1` (localhost 전용) |
 | `CLAUDE_PROJECTS_DIR` | 세션 트랜스크립트(JSONL) 소스 디렉터리 | `$HOME/.claude/projects` |
 | `CM_ENABLE_COWORK` | Claude Desktop **cowork**(local-agent-mode) 대화를 세션 목록에 노출. `1`/`true`/`yes`/`on`이면 켜짐 | 미설정 → `false` (꺼짐) |
 | `CM_COWORK_DIR` | cowork 세션 루트 디렉터리 | `$HOME/Library/Application Support/Claude/local-agent-mode-sessions` |
 | `CM_ENABLE_CHAT` | Claude Desktop의 **claude.ai 일반 채팅** 대화를 세션 목록에 노출(실험 기능). `1`/`true`/`yes`/`on`이면 켜짐 | 미설정 → `false` (꺼짐) |
 | `CM_CHAT_IDB_DIR` | Claude Desktop IndexedDB 루트(그 아래 `https_claude.ai_*.indexeddb.blob`을 스캔) | `$HOME/Library/Application Support/Claude/IndexedDB` |
-| `CM_ENABLE_CODEX` | OpenAI **Codex**(CLI·Desktop) 세션을 목록에 노출. `0`/`false`/`no`/`off`면 꺼짐 | 미설정 → `true` (켜짐) |
+| `CM_ENABLE_CODEX` | OpenAI **Codex**(CLI·Desktop) 세션을 실시간 모니터와 영속 원장(개요·사용량·실행)에 포함. `1`/`true`/`yes`/`on`이 아닌 값이면 꺼짐 | 미설정 → `true` (켜짐) |
 | `CM_CODEX_DIR` | Codex rollout 로그 루트(`YYYY/MM/DD/rollout-*.jsonl`) | `$HOME/.codex/sessions` |
+| `CM_COLLECTOR_ENABLED` | 새 원장 worker 시작 여부 (`true/false`, `1/0`) | `true` |
+| `CM_DATA_DIR` | SQLite와 백업을 둘 전용 절대 경로 | macOS: `$HOME/Library/Application Support/Claude Monitor` |
+| `CM_TIMEZONE` | 새 원장의 초기 IANA 시간대; 기존 DB 설정은 유지 | 기기 시간대 |
+| `CM_DB_BUSY_TIMEOUT_MS` | 사용량 DB의 busy 대기 상한 | `5000` |
+| `CM_COLLECTOR_BATCH_SIZE` | 수집 transaction의 관측 batch 상한 | `250` |
+| `CM_COLLECTOR_POLL_MS` | 원천 변경 확인 주기 | `1000` |
+| `CM_COLLECTOR_STARTUP_TIMEOUT_MS` | worker 시작 대기 상한 | `30000` |
+| `CM_COLLECTOR_SHUTDOWN_TIMEOUT_MS` | 정상 종료 대기 후 worker 종료 상한 | `5000` |
 
-> 주의 (`CM_BEARER_TOKEN`): 토큰을 설정하면 **브라우저 UI가 정상 동작하지 않습니다**. 브라우저는 페이지 이동·SSE 연결에 커스텀 `Authorization` 헤더를 실어 보낼 수 없으므로, 실시간 업데이트(SSE)와 Kill 버튼이 fail-closed로 막힙니다. 토큰 모드는 헤드리스/프로그램 방식 API 클라이언트 용도로만 사용하세요.
+> `CM_BEARER_TOKEN`: 새 리포트·실행·작업·설정 화면은 접근 토큰 입력 후 API를 호출합니다. 토큰은 페이지 메모리에만 두므로 새로고침 뒤 다시 입력합니다. 실시간 모니터(`/`)의 SSE·Kill UI에는 토큰 입력이 없어 토큰 모드에서 사용할 수 없습니다. HTML 화면 자체는 인증 경계가 아니며 API가 데이터를 보호합니다. hook 수신은 별도의 hook 토큰(`CM_RUNTIME_HOOK_TOKEN` 또는 데이터 폴더의 `runtime-hook.token`)을 요구합니다.
 >
 > 주의 (`CM_BLOCK_TOKEN_LIMIT` / `CM_WEEKLY_TOKEN_LIMIT`): 양의 정수가 아니면 미설정으로 간주되어 최근 피크값을 분모로 사용합니다.
->
-> 참고 (`PORT`): 기본 포트는 11314이며 `start-web.sh`가 `PORT`를 노출합니다. 다만 내부 시작 명령에 포트가 명시(`next start -p 11314`)되어 있어, 환경 변경 시 동작은 실행 환경에 따라 달라질 수 있습니다.
 >
 > 참고 (`CM_ENABLE_COWORK`): 켜면 Claude Desktop cowork 세션이 `Claude Desktop` 러너 배지와 함께 한 프로젝트 그룹으로 묶여 표시됩니다. cowork는 본질적으로 과거 데이터일 수 있어 **`CM_MAX_AGE_HOURS` 컷오프에서 면제**됩니다(플래그를 켜면 나이와 무관하게 표시 — `status`·`filter` 필터는 그대로 적용). cowork `audit.jsonl`은 추가-전용(append-only) 로그라 일반 세션과 동일한 증분 와칭으로 라이브 갱신되며, 슬래시 명령 전용 턴은 (Claude Code와 동일하게) 프롬프트 라벨로 표시되지 않고, 토큰 합계는 공유 파서의 기존 집계 방식을 따릅니다.
 >
 > 참고 (`CM_ENABLE_CHAT`, 실험 기능): claude.ai 웹뷰가 IndexedDB에 남기는 react-query 캐시를 읽어 **최근 대화 목록**(제목·요약·모델·최근 활동, 라이브)을 `Claude Chat` 그룹으로 표시합니다. 최근에 **연** 대화는 캐시에 전문(tree)이 남아 있어 턴 내역까지 보이고, 나머지는 메타데이터만 보입니다(전체 이력 미러 아님 — 캐시에 있는 만큼만). cowork와 달리 `CM_MAX_AGE_HOURS` 컷오프가 **그대로 적용**됩니다(목록이 라이브라 최근 활동 채팅이 자연스럽게 노출; 전체는 `all` 파라미터로 열람). 캐시 포맷·앱 스키마는 claude.ai 배포에 따라 바뀔 수 있으며, 이 경우 어댑터는 에러 대신 **빈 결과로 조용히 강등**됩니다.
 >
-> 참고 (`CM_ENABLE_CODEX`): `~/.codex/sessions`의 rollout JSONL을 읽어 Codex 세션을 **Claude Code 세션과 같은 프로젝트 그룹**에 표시합니다(cwd의 git remote 기준 통합). 러너 배지는 `Codex`(CLI/`codex exec`) 또는 `Codex Desktop`입니다. Codex가 `spawn_agent`로 띄운 하위 스레드는 부모 카드 아래 하위 에이전트로 나오고, Codex 내부 승인 검토(guardian) 스레드는 표시하지 않습니다. 컨텍스트 압축 뒤 이어지는 새 창 파일(`…_<window>.jsonl`)은 별도 세션으로 표시됩니다. 스레드별 프로세스가 없어 Kill 버튼은 제공되지 않으며, 토큰 수치는 Claude와 같은 기준(비캐시 입력 + 출력)으로 집계되어 Codex 자체 합계(캐시 포함)와 다릅니다. Codex 토큰은 상단 Claude 사용량 게이지(5시간/7일)에는 합산되지 않습니다.
+> 참고 (`CM_ENABLE_CODEX`): `~/.codex/sessions`의 rollout JSONL을 읽어 Codex 세션을 **Claude Code 세션과 같은 프로젝트 그룹**에 표시합니다(cwd의 git remote 기준 통합). 러너 배지는 `Codex`(CLI/`codex exec`) 또는 `Codex Desktop`입니다. Codex가 `spawn_agent`로 띄운 하위 스레드는 부모 카드 아래 하위 에이전트로 나오고, Codex 내부 승인 검토(guardian) 스레드는 표시하지 않습니다. 컨텍스트 압축 뒤 이어지는 새 창 파일(`…_<window>.jsonl`)은 별도 세션으로 표시됩니다. 스레드별 프로세스가 없어 Kill 버튼은 제공되지 않으며, 토큰 수치는 Claude와 같은 기준(비캐시 입력 + 출력)으로 집계되어 Codex 자체 합계(캐시 포함)와 다릅니다. Codex 토큰은 상단 Claude 사용량 게이지(5시간/7일)에는 합산되지 않습니다. 영속 원장(개요·사용량·실행)에는 응답 단위 기록(`token_usage_record`, CLI 0.153 이상)만 `response_id`로 한 번씩 합산하고, 입력은 Claude와 같이 캐시 제외분으로 저장합니다(관측 토큰 = Codex 자체 합계). 응답 id가 없는 구버전 파일은 진단 `missing_response_id`로만 남고, 내부 검토 스레드 토큰은 실행 없이 합산합니다. 단가 출처가 없어 비용은 미산정이며, 개요·사용량의 `도구` 필터로 Claude Code/Codex를 나눠 볼 수 있습니다. 실행 화면의 Codex 상태는 rollout의 작업 시작·항목 완료·응답 종료로 판단하며 승인·입력 대기와 프로세스 생존은 관측하지 않습니다.
+>
+> collector `ready`는 DB와 worker 준비를 의미합니다. `ingestionState`로 첫 색인(indexing), 감시(watching), 일부 기록(partial), 오류(error)를 별도로 확인하세요. 새 사용량 리포트는 영속 원장을 사용하며 기존 세션 탐색은 기존 어댑터를 유지합니다.
+
+DB 디렉터리는 현재 OS 사용자 전용이어야 합니다(디렉터리 `0700`, 파일 `0600`). 공유 폴더·네트워크 디스크 대신 로컬 전용 경로를 사용합니다. 이미 존재하는 공개 디렉터리는 권한을 임의 변경하지 않고 오류를 표시하므로 새 전용 디렉터리를 지정하세요. DB는 `usage.sqlite`, writer 잠금은 `writer.sqlite`입니다. 실행 중 잠금 파일을 삭제하지 않습니다.
+
+`GET /api/collector` 또는 `/api/health`의 `collector` 필드에서 `ready`, `disabled`, `error`와 진단 코드를 확인합니다. `writer_busy`면 같은 데이터 디렉터리를 사용하는 다른 앱을 종료한 뒤 재시작합니다. `database_corrupt`, `schema_too_new`, `migration_failed` 상태에서 DB를 지워 빈 DB로 대체하지 마세요. 비활성화가 필요하면 `CM_COLLECTOR_ENABLED=false pnpm start`로 기존 세션 화면만 실행할 수 있습니다.
+
+마이그레이션 전 백업은 SQLite backup API로 `backups/`에 생성하며, 복원은 기존 DB를 보존하고 새 전용 디렉터리에서 수행합니다. 제거 스크립트는 사용량 DB를 삭제하지 않습니다.
 
 ---
 
-## 4. 대시보드 한눈에
+## 4. 실시간 모니터 (`/`)
+
+이 절부터 9절까지는 실시간 모니터 화면과 CLI의 설명입니다. 영속 원장을 쓰는 개요·리포트는 `/overview` 등 별도 메뉴에 있습니다.
 
 ### 상단 헤더 (고정)
 
 화면 맨 위에 고정된 헤더가 붙어 있으며, 다음을 포함합니다.
 
-- **제목 `Claude Monitor`** — 앞에 `LIVE` 표시 글리프(◐)가 라이브 색으로 붙습니다.
+- **제목 `실시간 모니터`** — 앞에 `LIVE` 표시 글리프(◐)가 라이브 색으로 붙습니다. 화면 이동은 왼쪽 사이드바(좁은 화면에서는 상단 메뉴)를 씁니다.
 - **토큰 사용량 게이지(UsageBar)** — 두 개의 게이지를 나란히 보여 줍니다.
   - `5h` : 5시간 사용 창
   - `7d` : 7일 사용 창
@@ -165,7 +190,7 @@ bash scripts/uninstall.sh
 
 연결이 끊겼거나 숨긴(dismiss) 세션이 있으면 헤더 아래에 연결 상태와 `Restore All` 버튼이 나타납니다.
 
-> 사용량 데이터 출처는 두 가지입니다. (1) 로컬 추정치 — 트랜스크립트를 분석해 5시간 블록/7일 합으로 계산하며 추정값으로 표시됩니다. (2) OAuth 실측치 — macOS 키체인의 Claude Code OAuth 토큰으로 Anthropic 사용량 API를 조회한 실제 값입니다. 실측 조회는 레이트 리밋(429)이 있어 약 180초간 캐시되며, 토큰이 없거나 API 호출이 실패하면 로컬 추정치로 자동 폴백합니다.
+> 기존 게이지의 출처는 로컬 추정치와 선택적인 OAuth 조회입니다. 기본값은 트랜스크립트의 5시간 블록/7일 추정치이며 구독 한도와 같지 않습니다. `CM_REMOTE_USAGE_ENABLED=true`일 때만 macOS 키체인과 Anthropic 사용량 API를 조회합니다. 원격 값은 약 180초 캐시하며 인증값이 없거나 호출이 실패하면 로컬 추정치로 폴백합니다. 새 원장 리포트는 이 게이지를 사용하지 않습니다.
 
 ### 필터 바 (고정)
 
@@ -183,7 +208,7 @@ bash scripts/uninstall.sh
 
 세션은 프로젝트 단위로 묶여 표시됩니다. 웹 레이어는 각 세션의 작업 디렉터리(cwd)에서 `git remote get-url origin`으로 원격 저장소 URL을 조회하고 이를 정규화한 키(`git:host/owner/repo`)로 그룹을 만듭니다. 덕분에 **같은 저장소의 Conductor worktree와 일반 Claude Code 클론이 파일 경로가 달라도 하나의 그룹으로 통합**됩니다. 원격 origin을 가져올 수 없으면 cwd 경로 기반 키로 폴백합니다(예: `/conductor/workspaces/<name>` 또는 `/.worktrees/` 패턴).
 
-각 프로젝트 그룹은 `📁 {프로젝트명}` 라벨과 세션 개수 배지를 단 **고정(sticky) 서브헤더**로 표시됩니다. 라벨 옆에는 `시작 2026. 06. 23. · 누적 토큰 82.6M` 같은 요약이 한 줄로 붙습니다 — 상세 페이지와 같은 기준(projectKey 귀속, 첫 토큰 응답 시각)으로 **현재 필터에 보이는 세션**을 집계하며, 좁은 화면(640px 미만)에서는 프로젝트명 공간을 위해 숨겨집니다. 헤더는 반투명 배경 + 블러 처리되어 있고, 스크롤하면 상단 메인 헤더 바로 아래에 달라붙습니다. 셰브론(▾/▸)을 누르면 그룹을 접거나 펼칠 수 있으며, 접힘 상태는 localStorage에 저장되어 유지됩니다.
+각 프로젝트 그룹은 `📁 {프로젝트명}` 라벨과 세션 개수 배지를 단 **고정(sticky) 서브헤더**로 표시됩니다. 라벨 옆에는 `시작 2026. 06. 23. · 누적 토큰 (캐시 읽기 제외) 82.6M` 같은 요약이 한 줄로 붙습니다(새 리포트의 관측 토큰은 캐시 읽기를 포함하므로 값이 더 큽니다) — 상세 페이지와 같은 기준(projectKey 귀속, 첫 토큰 응답 시각)으로 **현재 필터에 보이는 세션**을 집계하며, 좁은 화면(640px 미만)에서는 프로젝트명 공간을 위해 숨겨집니다. 헤더는 반투명 배경 + 블러 처리되어 있고, 스크롤하면 상단 메인 헤더 바로 아래에 달라붙습니다. 셰브론(▾/▸)을 누르면 그룹을 접거나 펼칠 수 있으며, 접힘 상태는 localStorage에 저장되어 유지됩니다.
 
 고정 위치는 3단으로 쌓입니다: (1) 메인 헤더 → (2) 프로젝트 그룹 서브헤더 → (3) 펼친 세션 카드의 제목 줄. 스크롤 시 펼친 카드의 제목이 프로젝트 헤더 바로 아래에 달라붙습니다.
 
@@ -322,10 +347,11 @@ claude-monitor의 상태와 지표는 모두 **트랜스크립트 파일(JSONL)�
 
 ## 11. 아키텍처 요약
 
-claude-monitor는 pnpm 모노레포로, 세 개의 패키지로 구성됩니다.
+claude-monitor는 pnpm 모노레포로, 네 개의 패키지로 구성됩니다.
 
 - `@claude-monitor/core` — 세션 타입, 상태 임계값/파생 로직, 프로젝트 키 산출, 컨텍스트 한도 계산 등 핵심 로직.
 - `@claude-monitor/adapter-claude-code` — `~/.claude/projects/`의 JSONL 트랜스크립트를 읽고, chokidar로 파일을 감시(top-level + 하위 에이전트 디렉터리)하는 어댑터. 같은 패키지에 Claude Desktop cowork(`cowork/`), claude.ai chat(`chat/`), OpenAI Codex rollout(`codex/`) 어댑터가 함께 있다.
+- `@claude-monitor/collector` — SQLite 원장 schema·마이그레이션·backup API·단일 writer·worker 수명 관리. 증분 수집·리포트·관찰 신호·작업/운영 기능의 단일 writer를 담당.
 - `@claude-monitor/web` — Next.js 기반 웹 UI. 어댑터를 LocalDataSource로 감싸 git remote 기반 프로젝트 통합·러너 실측·컨텍스트 한도 보강을 수행하고, API와 대시보드 화면을 제공.
 
 **데이터 흐름:** chokidar 파일 와칭 → 변경 감지 시 트랜스크립트 파싱 → SSE(`/api/events`)로 브라우저에 실시간 푸시 → 대시보드가 1초 간격 클라이언트 틱과 함께 상대 시간/경과/상태 감쇠를 갱신.
@@ -345,10 +371,13 @@ scripts/
   build-icon.sh          SVG → PNG → .icns → 앱에 설치
   install.sh             bin/app 설치 + 웹 UI 빌드
   start-web.sh           웹 UI 런처 (~/bin/claude-monitor-web로 설치)
+  web.mjs                Next.js HTTP 서버 + collector 시작·종료
+  check-runtime.mjs      package engines 기반 설치·시작 요구사항 검사
   uninstall.sh           설치 산출물 제거 (소스는 유지)
 packages/
   core/                  공유 타입·유틸·어댑터/위젯 레지스트리
   adapter-claude-code/   JSONL 파서·증분 tail 리더·chokidar 와처 (+ cowork/ chat/ codex/ 어댑터)
+  collector/             원장·마이그레이션·백업·worker
   web/                   Next.js 14 App Router 대시보드 + SSE
 ```
 
@@ -356,14 +385,17 @@ packages/
 
 | 메서드 · 경로 | 인증 | 설명 |
 |---|---|---|
-| `GET /api/health` | 불필요 | 시스템 헬스 체크. `ok: true`, 어댑터 목록, 세션 수 반환. **유일하게 인증이 필요 없는 엔드포인트** |
+| `GET /api/health` | 불필요 | 웹 헬스 체크. 어댑터·세션 수와 별도의 collector 상태 반환. `ok`는 원장 수집 완료를 뜻하지 않음. **유일하게 인증이 필요 없는 엔드포인트** |
+| `GET /api/collector` | Bearer 필요 | 원장 worker·schema·진단 상태. 원문·경로·SQL 오류는 반환하지 않음 |
 | `GET /api/usage` | Bearer 필요 | 토큰 사용량. 출처(`api` 또는 `estimate`), OAuth 값, 로컬 값, 현재 시각 반환 |
 | `GET /api/sessions` | Bearer 필요 | 프로젝트별로 묶인 세션 목록. 쿼리: `maxAgeHours`, `all`(1\|0), `filter`(glob), `status`. 자식 세션은 `children` 배열로 분리 반환 |
 | `GET /api/sessions/[id]` | Bearer 필요 | 단일 세션 상세. 쿼리 `adapter`(기본 `claude-code`; `codex`, `claude-cowork`, `claude-chat`). 없으면 404 |
 | `GET /api/events` | Bearer 필요 | SSE 스트림. 이벤트 종류: `summary`, `removed`, `heartbeat`(30초 간격). 초기 heartbeat 후 스트리밍 |
 | `POST /api/sessions/[id]/kill` | Bearer 필요 | 세션 종료. 200(종료됨) / 404(없음) / 409(종료 실패·충돌) |
 
-> `/api/health`를 제외한 모든 엔드포인트는 `CM_BEARER_TOKEN`이 설정된 경우 `Authorization: Bearer <token>` 헤더를 요구하며, 없거나 잘못되면 401을 반환합니다. `/api/events`는 JSON이 아닌 SSE(`text/event-stream`) 스트림이므로 클라이언트는 이벤트 이름을 파싱해야 합니다. `/api/sessions`는 의도적으로 부모 세션(`projects`)과 자식 세션(`children`)을 나눠 반환하는데, 이는 SSE 재연결 시 이미 끝난 하위 에이전트가 이벤트를 다시 내보내지 않는 경우에도 스냅샷으로 복원하기 위함입니다.
+> 위 표에서 `/api/health`를 제외한 엔드포인트는 `CM_BEARER_TOKEN`이 설정된 경우 `Authorization: Bearer <token>` 헤더를 요구하며, 없거나 잘못되면 401을 반환합니다. `/api/events`는 JSON이 아닌 SSE(`text/event-stream`) 스트림이므로 클라이언트는 이벤트 이름을 파싱해야 합니다. `/api/sessions`는 의도적으로 부모 세션(`projects`)과 자식 세션(`children`)을 나눠 반환하는데, 이는 SSE 재연결 시 이미 끝난 하위 에이전트가 이벤트를 다시 내보내지 않는 경우에도 스냅샷으로 복원하기 위함입니다.
+
+hook 수신은 조회용 Bearer와 별도의 인증값을 사용합니다.
 
 ---
 
@@ -375,3 +407,21 @@ bash scripts/build-icon.sh 04-dashboard
 ```
 
 `icons/ClaudeMonitor.icns`를 다시 생성하고 `app/ClaudeMonitor.app/Contents/Resources/applet.icns`로 복사합니다. `~/Applications`에 반영하려면 `scripts/install.sh`를 다시 실행하세요.
+
+## 개인용 로컬 모니터 (L1–L3)
+
+첫 화면(`/`)은 실시간 모니터이고, 원장 개요는 `/overview`이며 `/usage`·`/projects`·`/runs`·`/work`·`/settings`로 이어집니다. 예전 `/sessions` 주소는 `/`로 이동합니다. 원장은 첫 실행에 기존 기록을 가져온 뒤 완결 JSONL 줄을 증분 반영합니다. 데이터 파일은 현재 사용자만 읽고 쓸 수 있는 전용 디렉터리에 저장합니다.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm start
+```
+
+Node 24.11 이상 24.x, pnpm 10.x가 필요합니다. `CLAUDE_PROJECTS_DIR`로 읽기 전용 원천, `CM_DATA_DIR`로 원장 위치, `CM_TIMEZONE`으로 최초 시간대를 지정할 수 있습니다. `CM_COLLECTOR_POLL_MS` 기본값은 1000입니다. 기존 구독 한도 조회는 `CM_REMOTE_USAGE_ENABLED=true`일 때만 Keychain/외부 API에 연결합니다. 새 리포트는 원격 계정을 요구하지 않습니다.
+
+실행·승인·입력 대기 신호는 선택적인 Claude Code hook 연결이 필요합니다. `node scripts/runtime-hook-token.mjs`로 데이터 폴더에 본인 전용 토큰 파일(`runtime-hook.token`, `0600`)을 만들면 서버와 hook이 같은 값을 읽습니다(환경변수 `CM_RUNTIME_HOOK_TOKEN`이 있으면 우선). `node scripts/runtime-hook-settings.mjs`는 병합할 설정을 출력하고 기존 사용자 설정을 수정하지 않습니다. 미연결/오래된 신호는 미확인으로 남습니다.
+
+작업 제목·실행 연결·결과물·사용자 확인은 수동으로 남깁니다. 응답 종료로 업무 완료를 자동 판정하지 않습니다. 설정 화면에서 백업·진단·보관 검토를 할 수 있으며 삭제는 범위 확인 후 백업과 함께 수행합니다.
+
+14일 실사용과 실제 CLI hook 연결 검증이 남아 있으며, 기능 구현만으로 상용 출시 완료를 주장하지 않습니다.

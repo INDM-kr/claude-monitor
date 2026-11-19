@@ -5,8 +5,6 @@
 set -eu
 
 CM_REPO_ROOT="${CM_REPO_ROOT:-@@CM_REPO_ROOT@@}"
-export HOSTNAME="${HOSTNAME:-127.0.0.1}"
-export PORT="${PORT:-11314}"
 export CLAUDE_PROJECTS_DIR="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 
 if [ ! -d "$CM_REPO_ROOT" ]; then
@@ -15,4 +13,9 @@ if [ ! -d "$CM_REPO_ROOT" ]; then
 fi
 
 cd "$CM_REPO_ROOT"
+if ! command -v node >/dev/null 2>&1; then
+  echo "error: Node is required; see README runtime requirements" >&2
+  exit 1
+fi
+node "$CM_REPO_ROOT/scripts/check-runtime.mjs"
 exec pnpm --filter @claude-monitor/web start

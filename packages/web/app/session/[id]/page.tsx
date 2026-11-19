@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { LocalShell } from "../../_components/LocalShell";
 import { usageSeriesFor } from "../../../lib/token-series";
 import { getDataSource } from "../../../lib/data-source/local";
 import { t } from "../../../lib/i18n/t";
@@ -30,7 +31,8 @@ export default async function SessionDetail({
   const series = await usageSeriesFor(s.ref);
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+    <LocalShell active="monitor" flush>
+    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
       <Link href="/" className="text-xs text-cyan-400 hover:underline">{t("detail.back")}</Link>
 
       <header className="space-y-2">
@@ -111,6 +113,7 @@ export default async function SessionDetail({
           <p className="text-zinc-400 whitespace-pre-wrap">{s.lastText}</p>
         </section>
       )}
-    </main>
+    </div>
+    </LocalShell>
   );
 }

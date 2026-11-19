@@ -1,0 +1,948 @@
+[
+  {
+    "name": "replay-same-request",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0
+    ],
+    "expectedTokens": 1150,
+    "expectedRequests": 1,
+    "notes": "Exact duplicate snapshots contribute once."
+  },
+  {
+    "name": "usage-revision",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": null,
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 5,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      1
+    ],
+    "expectedTokens": 1150,
+    "expectedRequests": 1,
+    "notes": "Same response updated in source order; replace the whole snapshot, do not sum."
+  },
+  {
+    "name": "distinct-retry",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-b",
+          "requestId": "request-b",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-b",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 20,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0,
+      1
+    ],
+    "expectedTokens": 1180,
+    "expectedRequests": 2,
+    "notes": "A new provider request/message may carry additional valid usage; count both. No guessed retry cost."
+  },
+  {
+    "name": "parent-child-rollup",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "session-parent/subagents/agent-child.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-b",
+          "requestId": "request-b",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-b",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 20,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "progress",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0,
+      1
+    ],
+    "expectedTokens": 1180,
+    "expectedRequests": 2,
+    "notes": "Child and parent share transcript sessionId, but distinct source run identities. Progress is excluded."
+  },
+  {
+    "name": "model-change",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-b",
+          "requestId": "request-b",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-b",
+            "model": "fixture-model-b",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 20,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0,
+      1
+    ],
+    "expectedTokens": 1180,
+    "expectedRequests": 2,
+    "notes": "Model belongs to the usage row, not the final session model.",
+    "expectedByModel": {
+      "fixture-model-a": 1150,
+      "fixture-model-b": 30
+    }
+  },
+  {
+    "name": "unknown-invalid-and-zero",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-error",
+          "requestId": "request-error",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-error",
+            "model": "<synthetic>",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-missing",
+          "requestId": "request-missing",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-missing",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-negative",
+          "requestId": "request-negative",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-negative",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": -1,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-no-id",
+          "requestId": "request-no-id",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-zero",
+          "requestId": "request-zero",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-zero",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      4
+    ],
+    "expectedTokens": 0,
+    "expectedRequests": 1,
+    "notes": "Synthetic errors excluded; missing/invalid/id-less rows diagnosed. Known zero remains one valid request.",
+    "expectedDiagnostics": 3
+  },
+  {
+    "name": "calendar-boundaries",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-before",
+          "requestId": "request-before",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-24T14:59:59.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-before",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-inside",
+          "requestId": "request-inside",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-24T15:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-inside",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 200,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-after",
+          "requestId": "request-after",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-25T15:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-after",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 300,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      1
+    ],
+    "expectedTokens": 200,
+    "expectedRequests": 1,
+    "notes": "Half-open interval, event time rather than mtime.",
+    "fromUtc": "2026-09-24T15:00:00.000Z",
+    "toUtc": "2026-09-25T15:00:00.000Z"
+  },
+  {
+    "name": "copied-log-and-new-generation",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "copy.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 2,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 2,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-b",
+          "requestId": "request-b",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-b",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 20,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0,
+      3
+    ],
+    "expectedTokens": 1180,
+    "expectedRequests": 2,
+    "notes": "File replay/rotation does not double-count or erase retained historical usage."
+  },
+  {
+    "name": "project-remap",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "parent.jsonl",
+        "project": "unassigned",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-b",
+          "requestId": "request-b",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-b",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 20,
+              "output_tokens": 10,
+              "cache_read_input_tokens": 0,
+              "cache_creation_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [
+      0,
+      1
+    ],
+    "expectedTokens": 1180,
+    "expectedRequests": 2,
+    "notes": "Current mapping can change groups while global usage remains identical.",
+    "expectedByProject": {
+      "alpha": 1150,
+      "unassigned": 30
+    },
+    "remapExpected": {
+      "alpha": 1180
+    }
+  },
+  {
+    "name": "ambiguous-cross-source-revision",
+    "provenance": "synthetic-contract-case",
+    "entries": [
+      {
+        "source": "parent.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 50,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      },
+      {
+        "source": "copy.jsonl",
+        "project": "alpha",
+        "generation": 1,
+        "record": {
+          "type": "assistant",
+          "uuid": "record-a",
+          "requestId": "request-a",
+          "sessionId": "session-parent",
+          "cwd": "/workspace/alpha",
+          "timestamp": "2026-09-18T00:00:00.000Z",
+          "version": "2.1.257",
+          "message": {
+            "id": "message-a",
+            "model": "fixture-model-a",
+            "content": [],
+            "stop_reason": "end_turn",
+            "usage": {
+              "input_tokens": 100,
+              "output_tokens": 999,
+              "cache_read_input_tokens": 800,
+              "cache_creation_input_tokens": 200,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 200,
+                "ephemeral_1h_input_tokens": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "acceptedIndexes": [],
+    "expectedTokens": 0,
+    "expectedRequests": 0,
+    "notes": "Equal timestamp with contradictory cross-file snapshots: unresolved key excluded with diagnostic, never choose directory traversal order.",
+    "expectedDiagnostics": 1
+  }
+]

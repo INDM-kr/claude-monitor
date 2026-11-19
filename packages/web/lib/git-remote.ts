@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { canonicalIdentity, type HostLookup } from "@claude-monitor/collector";
 
 const pexec = promisify(exec);
 
@@ -44,6 +45,12 @@ function mk(host: string, path: string): RemoteProject {
   return { key: `git:${host.toLowerCase()}/${clean}`, label };
 }
 
+/** The ledger's identity for the same remote: an SSH alias host becomes the real host, so both screens group alike. */
+export async function canonicalRemote(url: string, lookup?: HostLookup): Promise<RemoteProject | null> {
+  const remote = normalizeRemote(url);
+  return remote ? { ...remote, key: await canonicalIdentity(remote.key, lookup) } : null;
+}
+
 // cwd → resolved remote (or null). Permanent per process — remotes rarely change;
 // a restart re-resolves. Avoids spawning `git` on every snapshot.
 const cache = new Map<string, RemoteProject | null>();
@@ -61,7 +68,7 @@ export async function remoteProject(cwd: string): Promise<RemoteProject | null> 
   let result: RemoteProject | null = null;
   try {
     const { stdout } = await pexec("git remote get-url origin", { cwd, timeout: 2000 });
-    result = normalizeRemote(stdout);
+    result = await canonicalRemote(stdout);
   } catch {
     result = null; // cwd missing / not a repo / no origin
   }

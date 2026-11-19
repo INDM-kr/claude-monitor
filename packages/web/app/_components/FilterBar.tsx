@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { t } from "../../lib/i18n/t";
 import { parseStatuses } from "../../lib/filter";
@@ -14,6 +14,7 @@ const AGE_OPTIONS = [
 
 export function FilterBar() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useSearchParams();
   // "전체" sets ?all=1 and drops maxAgeHours; without accounting for `all`, the
   // active highlight would fall back to "24" and never mark 전체 (and keep 24h lit).
@@ -42,9 +43,9 @@ export function FilterBar() {
         if (v === null || v === "") sp.delete(k);
         else sp.set(k, v);
       }
-      router.replace(`/?${sp.toString()}`);
+      router.replace(`${pathname}?${sp.toString()}`);
     },
-    [params, router],
+    [params, pathname, router],
   );
 
   return (
